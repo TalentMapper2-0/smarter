@@ -3,8 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Send } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
-import z from "zod";
 import { useState } from "react";
+import z from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { trpc } from "@/trpc/client/client";
 
-import { saveUploadedCsvRows } from "./actions";
 import { ColumnMappingField } from "./column-mapping-field";
 import {
   REQUIRED_FIELDS,
@@ -63,6 +63,8 @@ export function UploadCsvForm({
   const [rows, setRows] = useState<ParsedCsvRow[]>([]);
   const [mapping, setMapping] = useState<ColumnMapping>(createEmptyMapping);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const saveUploadedCsvRowsMutation = trpc.candidates.create.useMutation();
   const form = useForm<
     z.input<typeof formSchema>,
     undefined,
@@ -77,6 +79,7 @@ export function UploadCsvForm({
 
   async function onSubmit(data: z.infer<typeof formSchema>) {
     setParseError(null);
+    setSaveError(null);
 
     const csvText = await data.file.text();
     const parsedCsv = parseCsv(csvText);
@@ -97,6 +100,7 @@ export function UploadCsvForm({
   }
 
   const isSubmitting = form.formState.isSubmitting;
+  const isSaving = saveUploadedCsvRowsMutation.isPending;
   const isSubmittable = form.formState.isValid && !isSubmitting;
   const mappedFieldCount = REQUIRED_FIELDS.filter(
     (field) => !!mapping[field]
@@ -105,6 +109,8 @@ export function UploadCsvForm({
     columns.length === 0 || mappedFieldCount !== REQUIRED_FIELDS.length;
 
   async function handleSave() {
+    setSaveError(null);
+
     const mappedRows: MappedCsvRow[] = rows.map((row) => ({
       linkedinUrl: row[mapping.linkedinUrl] ?? "",
       salesNavigatorId: row[mapping.salesNavigatorId] ?? "",
@@ -112,8 +118,20 @@ export function UploadCsvForm({
       lastName: row[mapping.lastName] ?? "",
     }));
 
-    await saveUploadedCsvRows(mappedRows);
-    onSaveAction();
+    try {
+      await saveUploadedCsvRowsMutation.mutateAsync(mappedRows);
+      onSaveAction();
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Opslaan mislukt. Controleer je sessie en probeer het opnieuw.";
+
+      console.error("Failed to save uploaded CSV rows", error);
+      setSaveError(
+        message
+      );
+    }
   }
 
   return (
@@ -151,6 +169,7 @@ export function UploadCsvForm({
         </FieldGroup>
 
         {parseError ? <FieldError>{parseError}</FieldError> : null}
+        {saveError ? <FieldError>{saveError}</FieldError> : null}
 
         {columns.length > 0 ? (
           <FieldGroup>
@@ -189,9 +208,10 @@ export function UploadCsvForm({
               <Button
                 type="button"
                 onClick={handleSave}
-                disabled={isSaveDisabled}
+                disabled={isSaveDisabled || isSaving}
               >
                 Opslaan
+                {isSaving ? <Spinner /> : null}
               </Button>
             </div>
           </FieldGroup>

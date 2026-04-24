@@ -6,7 +6,7 @@ import {
   BaseNodeHeader,
   BaseNodeHeaderTitle,
 } from "@/components/nodes/base-node"
-import { type Node, type NodeProps } from "@xyflow/react"
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
 import { memo } from "react"
 import { NodeStatus, NodeStatusIndicator } from "../node-status-indicator"
 
@@ -24,18 +24,33 @@ export type CandidateClassificationFlowNode = Node<
 export const CandidateClassificationNode = memo(
   ({ data }: NodeProps<CandidateClassificationFlowNode>) => {
     return (
-      <NodeStatusIndicator status={data?.status} variant="border">
-        <BaseNode className="min-w-64">
-          <BaseNodeHeader>
-            <BaseNodeHeaderTitle>
-              Kandidaat classificeren
-            </BaseNodeHeaderTitle>
-          </BaseNodeHeader>
-          <BaseNodeContent className="pt-0 text-sm text-muted-foreground">
-            Gebruik deze node om binnenkomende sollicitaties te groeperen op fit.
-          </BaseNodeContent>
-        </BaseNode>
-      </NodeStatusIndicator>
+      <div className="relative">
+        <Handle
+          type="target"
+          position={Position.Left}
+          isConnectable={false}
+          style={{ opacity: 0 }}
+        />
+
+        <NodeStatusIndicator status={data?.status} variant="border">
+          <BaseNode className="min-w-64">
+            <BaseNodeHeader>
+              <BaseNodeHeaderTitle>Kandidaat classificeren</BaseNodeHeaderTitle>
+            </BaseNodeHeader>
+            <BaseNodeContent className="pt-0 text-sm text-muted-foreground">
+              Gebruik deze node om binnenkomende sollicitaties te groeperen op
+              fit.
+            </BaseNodeContent>
+          </BaseNode>
+        </NodeStatusIndicator>
+
+        <Handle
+          type="source"
+          position={Position.Right}
+          isConnectable={false}
+          style={{ opacity: 0 }}
+        />
+      </div>
     )
   }
 )

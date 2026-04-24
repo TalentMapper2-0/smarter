@@ -82,6 +82,7 @@ export default function Page() {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        proOptions={{ hideAttribution: true }}
         fitView
         nodesDraggable={false}
         fitViewOptions={{

@@ -1,25 +1,36 @@
-"use client"
+"use client";
 
 import {
   BaseNode,
   BaseNodeContent,
   BaseNodeHeader,
   BaseNodeHeaderTitle,
-} from "@/components/nodes/base-node"
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
-import { memo } from "react"
-import { NodeStatus, NodeStatusIndicator } from "../node-status-indicator"
+} from "@/components/nodes/base-node";
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { memo } from "react";
+import { NodeStatus, NodeStatusIndicator } from "../node-status-indicator";
 
-export const CANDIDATE_CLASSIFICATION_NODE = "candidateClassification"
+export const CANDIDATE_CLASSIFICATION_NODE = "candidateClassification";
+
+const edgeAnchorStyle = {
+  width: 1,
+  height: 1,
+  minWidth: 1,
+  minHeight: 1,
+  border: 0,
+  background: "transparent",
+  opacity: 0,
+  transform: "translateY(-50%)",
+}
 
 export type CandidateClassificationNodeData = {
-  status?: NodeStatus
-}
+  status?: NodeStatus;
+};
 
 export type CandidateClassificationFlowNode = Node<
   CandidateClassificationNodeData,
   typeof CANDIDATE_CLASSIFICATION_NODE
->
+>;
 
 export const CandidateClassificationNode = memo(
   ({ data }: NodeProps<CandidateClassificationFlowNode>) => {
@@ -29,7 +40,7 @@ export const CandidateClassificationNode = memo(
           type="target"
           position={Position.Left}
           isConnectable={false}
-          style={{ opacity: 0 }}
+          style={edgeAnchorStyle}
         />
 
         <NodeStatusIndicator status={data?.status} variant="border">
@@ -48,11 +59,11 @@ export const CandidateClassificationNode = memo(
           type="source"
           position={Position.Right}
           isConnectable={false}
-          style={{ opacity: 0 }}
+          style={edgeAnchorStyle}
         />
       </div>
-    )
+    );
   }
-)
+);
 
-CandidateClassificationNode.displayName = "CandidateClassificationNode"
+CandidateClassificationNode.displayName = "CandidateClassificationNode";

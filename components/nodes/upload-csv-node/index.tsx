@@ -14,6 +14,17 @@ import { UploadCsvDialog } from "./upload-csv-dialog";
 
 export const UPLOAD_CSV_NODE = "uploadCsv";
 
+const edgeAnchorStyle = {
+  width: 1,
+  height: 1,
+  minWidth: 1,
+  minHeight: 1,
+  border: 0,
+  background: "transparent",
+  opacity: 0,
+  transform: "translateY(-50%)",
+};
+
 export type UploadCsvNodeData = {
   status?: NodeStatus;
 };
@@ -30,7 +41,7 @@ export const UploadCsvNode = memo(({ data }: NodeProps<UploadCsvFlowNode>) => {
           type="target"
           position={Position.Left}
           isConnectable={false}
-          style={{ opacity: 0 }}
+          style={edgeAnchorStyle}
         />
 
         <NodeStatusIndicator status={data?.status} variant="border">
@@ -51,7 +62,7 @@ export const UploadCsvNode = memo(({ data }: NodeProps<UploadCsvFlowNode>) => {
           type="source"
           position={Position.Right}
           isConnectable={false}
-          className="h-3! w-3! rounded-full! border-2! border-background! bg-primary!"
+          style={edgeAnchorStyle}
         />
       </div>
       <UploadCsvDialog open={open} onOpenChangeAction={setOpen} />

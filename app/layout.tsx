@@ -1,13 +1,17 @@
 import { Geist_Mono, Inter } from "next/font/google";
 
+import { AppSidebar } from "@/components/app-sidebar";
+import DynamicBreadcrumb from "@/components/dynamic-breadcrumb";
+import { Separator } from "@/components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { TRPCProvider } from "@/trpc/client/provider";
 import "./globals.css";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import { Separator } from "@/components/ui/separator";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -45,24 +49,11 @@ export default function RootLayout({
                       orientation="vertical"
                       className="mr-2 data-vertical:h-4 data-vertical:self-auto"
                     />
-                    <Breadcrumb>
-                      <BreadcrumbList>
-                        <BreadcrumbItem className="hidden md:block">
-                          <BreadcrumbLink href="#">
-                            Build Your Application
-                          </BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator className="hidden md:block" />
-                        <BreadcrumbItem>
-                          <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                        </BreadcrumbItem>
-                      </BreadcrumbList>
-                    </Breadcrumb>
+                    <DynamicBreadcrumb />
                   </div>
                 </header>
-                <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-                  {children}
-                </div>
+                <Separator />
+                <div className="flex flex-1 flex-col">{children}</div>
               </SidebarInset>
             </SidebarProvider>
           </TRPCProvider>

@@ -21,7 +21,7 @@ export default class CandidatesRepository {
     }));
 
     const { error } = await supabase
-      .from("classify_candidate")
+      .from("classify_candidates")
       .insert(candidateRows);
 
     if (error) {

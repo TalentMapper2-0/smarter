@@ -7,11 +7,11 @@ import {
   type EdgeProps,
 } from "@xyflow/react";
 
-export const SUCCESS_EDGE = "success-edge";
+export const NORMAL_EDGE = "normal-edge";
 
-export type SuccessFlowEdge = Edge<Record<string, never>, typeof SUCCESS_EDGE>;
+export type NormalFlowEdge = Edge<Record<string, never>, typeof NORMAL_EDGE>;
 
-export function SuccessEdge({
+export function NormalEdge({
   id,
   sourceX,
   sourceY,
@@ -21,7 +21,7 @@ export function SuccessEdge({
   targetPosition,
   markerEnd,
   style,
-}: EdgeProps<SuccessFlowEdge>) {
+}: EdgeProps<NormalFlowEdge>) {
   const [edgePath] = getSmoothStepPath({
     sourceX,
     sourceY,

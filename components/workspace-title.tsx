@@ -17,9 +17,26 @@ function getWorkspaceId(pathname: string) {
   return id;
 }
 
+function cleanRouteSegment(segment: string) {
+  return decodeURIComponent(segment)
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getRouteTitle(pathname: string) {
+  const segments = pathname.split("/").filter(Boolean);
+
+  if (segments.length === 0) {
+    return "Home";
+  }
+
+  return segments.map(cleanRouteSegment).join(" / ");
+}
+
 export function WorkspaceTitle() {
   const pathname = usePathname();
   const workspaceId = getWorkspaceId(pathname);
+  const routeTitle = workspaceId ? "Workspace" : getRouteTitle(pathname);
   const { data: workspace } = trpc.workspaces.byId.useQuery(
     { id: workspaceId ?? "" },
     { enabled: Boolean(workspaceId) }
@@ -27,7 +44,7 @@ export function WorkspaceTitle() {
 
   return (
     <h1 className="truncate text-sm font-medium">
-      {workspace?.title ?? "Workspace"}
+      {workspace?.title ?? routeTitle}
     </h1>
   );
 }

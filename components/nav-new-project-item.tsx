@@ -30,7 +30,7 @@ export default function NavNewProjectItem() {
       setDialogOpen(false);
       setTitle("");
       utils.workspaces.listRecent.invalidate();
-      router.push(`/projects/${data.id}`);
+      router.push(`/p/${data.id}`);
     },
   });
 

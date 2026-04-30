@@ -4,20 +4,20 @@ import {
   Background,
   Controls,
   MarkerType,
+  MiniMap,
   ReactFlow,
   type Edge,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useMemo } from "react";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import {
   EDGE_WITH_BUTTON,
   EdgeWithButton,
 } from "@/components/edges/edge-with-button";
-import { SUCCESS_EDGE, SuccessEdge } from "@/components/edges/success-edge";
+import { NORMAL_EDGE, NormalEdge } from "@/components/edges/normal-edge";
 import {
   CANDIDATE_CLASSIFICATION_NODE,
   CandidateClassificationNode,
@@ -29,8 +29,11 @@ import {
   type UploadCsvNodeData,
 } from "@/components/nodes/upload-csv-node";
 import { useWorkspaceFlowStore } from "@/stores/workspace-flow-store";
-import { NodeStatus } from "@/types/note";
-import { type WorkspaceFlowStateSnapshot } from "@/types/workspace";
+import {
+  getWorkspaceNodeStatuses,
+  WorkspaceFlowStage,
+  type WorkspaceFlowStateSnapshot,
+} from "@/types/workspace";
 
 const nodeTypes = {
   [CANDIDATE_CLASSIFICATION_NODE]: CandidateClassificationNode,
@@ -39,15 +42,29 @@ const nodeTypes = {
 
 const edgeTypes = {
   [EDGE_WITH_BUTTON]: EdgeWithButton,
-  [SUCCESS_EDGE]: SuccessEdge,
+  [NORMAL_EDGE]: NormalEdge,
 };
 
-const inactiveEdgeColor = "var(--muted-foreground/50)";
-const successEdgeColor = "var(--color-emerald-600)";
+type WorkspaceNode = Node<CandidateClassificationNodeData | UploadCsvNodeData>;
+
+const edgeColor = "var(--muted-foreground/50)";
 
 const START_X = 80;
 const Y = 120;
 const GAP = 500;
+const DEFAULT_NODE_SIZE = {
+  width: 256,
+  height: 112,
+};
+const INITIAL_FIT_VIEW_MAX_ZOOM = 0.75;
+
+function withDefaultNodeSize<TNode extends WorkspaceNode>(node: TNode): TNode {
+  return {
+    ...node,
+    initialWidth: DEFAULT_NODE_SIZE.width,
+    initialHeight: DEFAULT_NODE_SIZE.height,
+  };
+}
 
 export function WorkspaceFlow({
   workspaceId,
@@ -57,27 +74,27 @@ export function WorkspaceFlow({
   initialFlowState: WorkspaceFlowStateSnapshot;
 }) {
   const {
-    uploadCsvStatus,
-    candidateClassificationStatus,
-    isEdgeButtonDisabled,
+    storeWorkspaceId,
+    flowStage,
     setWorkspaceFlow,
   } = useWorkspaceFlowStore(
     useShallow((state) => ({
-      uploadCsvStatus: state.uploadCsvStatus,
-      candidateClassificationStatus: state.candidateClassificationStatus,
-      isEdgeButtonDisabled: state.isEdgeButtonDisabled,
+      storeWorkspaceId: state.workspaceId,
+      flowStage: state.flowStage,
       setWorkspaceFlow: state.setWorkspaceFlow,
     }))
   );
+  const currentFlowStage =
+    storeWorkspaceId === workspaceId ? flowStage : initialFlowState.flowStage;
 
   useEffect(() => {
-    setWorkspaceFlow(initialFlowState);
-  }, [initialFlowState, setWorkspaceFlow]);
+    setWorkspaceFlow(initialFlowState, workspaceId);
+  }, [initialFlowState, setWorkspaceFlow, workspaceId]);
 
-  const nodes = useMemo<
-    Node<CandidateClassificationNodeData | UploadCsvNodeData>[]
-  >(
-    () => [
+  const nodes = useMemo<WorkspaceNode[]>(() => {
+    const { uploadCsvStatus, candidateClassificationStatus } =
+      getWorkspaceNodeStatuses(currentFlowStage);
+    const flowNodes: WorkspaceNode[] = [
       {
         id: "upload",
         type: UPLOAD_CSV_NODE,
@@ -100,53 +117,32 @@ export function WorkspaceFlow({
           pointerEvents: "none",
         },
       },
-    ],
-    [candidateClassificationStatus, uploadCsvStatus, workspaceId]
-  );
+    ];
+
+    return flowNodes.map(withDefaultNodeSize);
+  }, [currentFlowStage, workspaceId]);
 
   const edges = useMemo<Edge[]>(() => {
-    const hasStartedClassification =
-      candidateClassificationStatus !== NodeStatus.Initial;
-
-    if (hasStartedClassification) {
-      return [
-        {
-          id: "upload-to-classification",
-          source: "upload",
-          target: "classification",
-          type: SUCCESS_EDGE,
-          selectable: false,
-          focusable: false,
-          animated: false,
-          style: {
-            stroke: successEdgeColor,
-            strokeWidth: 2,
-          },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: successEdgeColor,
-          },
-        },
-      ];
-    }
+    const isEdgeButtonDisabled =
+      currentFlowStage !== WorkspaceFlowStage.ReadyToClassify;
 
     return [
       {
         id: "upload-to-classification",
         source: "upload",
         target: "classification",
-        type: EDGE_WITH_BUTTON,
+        type: isEdgeButtonDisabled ? NORMAL_EDGE : EDGE_WITH_BUTTON,
         selectable: false,
         focusable: false,
         animated: false,
         style: {
-          stroke: inactiveEdgeColor,
+          stroke: edgeColor,
           strokeWidth: 1.5,
           strokeDasharray: "8 4",
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: inactiveEdgeColor,
+          color: edgeColor,
         },
         data: {
           disable: isEdgeButtonDisabled,
@@ -154,10 +150,10 @@ export function WorkspaceFlow({
         },
       },
     ];
-  }, [candidateClassificationStatus, isEdgeButtonDisabled, workspaceId]);
+  }, [currentFlowStage, workspaceId]);
 
   return (
-    <div className="w-full flex-1">
+    <div className="h-[calc(100svh-4.0625rem)] min-h-140 w-full flex-1">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -168,12 +164,17 @@ export function WorkspaceFlow({
         nodesDraggable={false}
         fitViewOptions={{
           padding: 0.3,
-          maxZoom: 1,
+          maxZoom: INITIAL_FIT_VIEW_MAX_ZOOM,
         }}
+        translateExtent={[
+          [-300, -250],
+          [1600, 900],
+        ]}
         zoomOnDoubleClick={false}
       >
         <Background />
-        <Controls />
+        <Controls showInteractive={false} />
+        <MiniMap nodeStrokeWidth={3} />
       </ReactFlow>
     </div>
   );

@@ -2,14 +2,18 @@
 
 import { create } from "zustand";
 
-import { NodeStatus } from "@/types/note";
 import {
   defaultWorkspaceFlowState,
   type WorkspaceFlowStateSnapshot,
+  WorkspaceFlowStage,
 } from "@/types/workspace";
 
 type WorkspaceFlowState = WorkspaceFlowStateSnapshot & {
-  setWorkspaceFlow: (flowState: WorkspaceFlowStateSnapshot) => void;
+  workspaceId: string | null;
+  setWorkspaceFlow: (
+    flowState: WorkspaceFlowStateSnapshot,
+    workspaceId?: string
+  ) => void;
   completeCsvUpload: () => void;
   startCandidateClassification: () => void;
   resetWorkspaceFlow: () => void;
@@ -17,22 +21,28 @@ type WorkspaceFlowState = WorkspaceFlowStateSnapshot & {
 
 export const useWorkspaceFlowStore = create<WorkspaceFlowState>((set, get) => ({
   ...defaultWorkspaceFlowState,
-  setWorkspaceFlow: (flowState) => set(flowState),
+  workspaceId: null,
+  setWorkspaceFlow: (flowState, workspaceId) =>
+    set((state) => ({
+      ...flowState,
+      workspaceId: workspaceId ?? state.workspaceId,
+    })),
   completeCsvUpload: () =>
     set({
-      uploadCsvStatus: NodeStatus.Success,
-      candidateClassificationStatus: NodeStatus.Initial,
-      isEdgeButtonDisabled: false,
+      flowStage: WorkspaceFlowStage.ReadyToClassify,
     }),
   startCandidateClassification: () => {
-    if (get().isEdgeButtonDisabled) {
+    if (get().flowStage !== WorkspaceFlowStage.ReadyToClassify) {
       return;
     }
 
     set({
-      candidateClassificationStatus: NodeStatus.Loading,
-      isEdgeButtonDisabled: true,
+      flowStage: WorkspaceFlowStage.Classifying,
     });
   },
-  resetWorkspaceFlow: () => set(defaultWorkspaceFlowState),
+  resetWorkspaceFlow: () =>
+    set({
+      ...defaultWorkspaceFlowState,
+      workspaceId: null,
+    }),
 }));

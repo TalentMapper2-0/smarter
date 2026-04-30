@@ -7,7 +7,7 @@ import {
 } from "@/types/workspace";
 
 const workspaceSelect =
-  "id, title, userId:user_id, createdAt:created_at, uploadCsvStatus:upload_csv_status, candidateClassificationStatus:candidate_classification_status, isEdgeButtonDisabled:is_edge_button_disabled";
+  "id, title, userId:user_id, createdAt:created_at, flowStage:flow_stage";
 
 type WorkspaceRow = Omit<Workspace, "flowState"> & WorkspaceFlowStateSnapshot;
 
@@ -18,14 +18,7 @@ function mapWorkspace(row: WorkspaceRow): Workspace {
     userId: row.userId,
     createdAt: row.createdAt,
     flowState: {
-      uploadCsvStatus:
-        row.uploadCsvStatus ?? defaultWorkspaceFlowState.uploadCsvStatus,
-      candidateClassificationStatus:
-        row.candidateClassificationStatus ??
-        defaultWorkspaceFlowState.candidateClassificationStatus,
-      isEdgeButtonDisabled:
-        row.isEdgeButtonDisabled ??
-        defaultWorkspaceFlowState.isEdgeButtonDisabled,
+      flowStage: row.flowStage ?? defaultWorkspaceFlowState.flowStage,
     },
   };
 }
@@ -104,10 +97,7 @@ export default class WorkspacesRepository {
     const { data, error } = await supabase
       .from("workspaces")
       .update({
-        upload_csv_status: flowState.uploadCsvStatus,
-        candidate_classification_status:
-          flowState.candidateClassificationStatus,
-        is_edge_button_disabled: flowState.isEdgeButtonDisabled,
+        flow_stage: flowState.flowStage,
       })
       .eq("id", id)
       .eq("user_id", userId)

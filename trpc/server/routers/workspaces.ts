@@ -3,13 +3,11 @@ import "server-only";
 import z from "zod";
 
 import WorkspacesService from "@/core/services/workspaces-service";
-import { NodeStatus } from "@/types/note";
+import { WorkspaceFlowStage } from "@/types/workspace";
 import { protectedProcedure, router } from "../init";
 
 const flowStateSchema = z.object({
-  uploadCsvStatus: z.enum(NodeStatus),
-  candidateClassificationStatus: z.enum(NodeStatus),
-  isEdgeButtonDisabled: z.boolean(),
+  flowStage: z.enum(WorkspaceFlowStage),
 });
 
 export const workspacesRouter = router({

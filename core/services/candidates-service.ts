@@ -1,7 +1,7 @@
 import { Context } from "@/trpc/server/init";
 import CandidatesRepository from "../repositories/candidates-repository";
 import WorkspacesRepository from "../repositories/workspaces-repository";
-import { NodeStatus } from "@/types/note";
+import { WorkspaceFlowStage } from "@/types/workspace";
 
 type UploadedCandidateRow = {
   linkedinUrl: string;
@@ -38,9 +38,7 @@ export default class CandidatesService {
       id: input.workspaceId,
       userId: ctx.user.id,
       flowState: {
-        uploadCsvStatus: NodeStatus.Success,
-        candidateClassificationStatus: NodeStatus.Initial,
-        isEdgeButtonDisabled: false,
+        flowStage: WorkspaceFlowStage.ReadyToClassify,
       },
     });
   }

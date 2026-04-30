@@ -1,16 +1,51 @@
 import { NodeStatus } from "./note";
 
+export enum WorkspaceFlowStage {
+  NeedsCsv = "needs-csv",
+  ReadyToClassify = "ready-to-classify",
+  Classifying = "classifying",
+  ClassificationFailed = "classification-failed",
+  Complete = "complete",
+}
+
 export type WorkspaceFlowStateSnapshot = {
-  uploadCsvStatus: NodeStatus;
-  candidateClassificationStatus: NodeStatus;
-  isEdgeButtonDisabled: boolean;
+  flowStage: WorkspaceFlowStage;
 };
 
 export const defaultWorkspaceFlowState: WorkspaceFlowStateSnapshot = {
-  uploadCsvStatus: NodeStatus.ActionRequired,
-  candidateClassificationStatus: NodeStatus.Initial,
-  isEdgeButtonDisabled: true,
+  flowStage: WorkspaceFlowStage.NeedsCsv,
 };
+
+export function getWorkspaceNodeStatuses(flowStage: WorkspaceFlowStage) {
+  switch (flowStage) {
+    case WorkspaceFlowStage.ReadyToClassify:
+      return {
+        uploadCsvStatus: NodeStatus.Success,
+        candidateClassificationStatus: NodeStatus.Initial,
+      };
+    case WorkspaceFlowStage.Classifying:
+      return {
+        uploadCsvStatus: NodeStatus.Success,
+        candidateClassificationStatus: NodeStatus.Loading,
+      };
+    case WorkspaceFlowStage.ClassificationFailed:
+      return {
+        uploadCsvStatus: NodeStatus.Success,
+        candidateClassificationStatus: NodeStatus.Error,
+      };
+    case WorkspaceFlowStage.Complete:
+      return {
+        uploadCsvStatus: NodeStatus.Success,
+        candidateClassificationStatus: NodeStatus.Success,
+      };
+    case WorkspaceFlowStage.NeedsCsv:
+    default:
+      return {
+        uploadCsvStatus: NodeStatus.ActionRequired,
+        candidateClassificationStatus: NodeStatus.Initial,
+      };
+  }
+}
 
 export type Workspace = {
   id: string;

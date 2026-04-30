@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useWorkspaceFlowStore } from "@/stores/workspace-flow-store";
 import { trpc } from "@/trpc/client/client";
-import { NodeStatus } from "@/types/note";
+import { WorkspaceFlowStage } from "@/types/workspace";
 
 export const EDGE_WITH_BUTTON = "edge-with-button";
 
@@ -85,22 +85,34 @@ export function EdgeWithButton({
               if (!workspaceId) {
                 return;
               }
+
+              const loadingFlowState = {
+                flowStage: WorkspaceFlowStage.Classifying,
+              };
+              const successFlowState = {
+                flowStage: WorkspaceFlowStage.Complete,
+              };
+
               updateFlowStateMutation.mutate(
                 {
                   id: workspaceId,
-                  flowState: {
-                    uploadCsvStatus: NodeStatus.Success,
-                    candidateClassificationStatus: NodeStatus.Loading,
-                    isEdgeButtonDisabled: true,
-                  },
+                  flowState: loadingFlowState,
                 },
                 {
-                  onSuccess: (flowState) => setWorkspaceFlow(flowState),
+                  onSuccess: (flowState) => {
+                    setWorkspaceFlow(flowState);
+
+                    window.setTimeout(() => {
+                      setWorkspaceFlow(successFlowState);
+                      updateFlowStateMutation.mutate({
+                        id: workspaceId,
+                        flowState: successFlowState,
+                      });
+                    }, 5000);
+                  },
                   onError: () =>
                     setWorkspaceFlow({
-                      uploadCsvStatus: NodeStatus.Success,
-                      candidateClassificationStatus: NodeStatus.Initial,
-                      isEdgeButtonDisabled: false,
+                      flowStage: WorkspaceFlowStage.ReadyToClassify,
                     }),
                 }
               );

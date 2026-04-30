@@ -55,9 +55,11 @@ const formSchema = z.object({
 export function UploadCsvForm({
   className,
   onSaveAction,
+  workspaceId,
 }: {
   className?: string;
   onSaveAction: () => void;
+  workspaceId: string;
 }) {
   const [columns, setColumns] = useState<string[]>([]);
   const [rows, setRows] = useState<ParsedCsvRow[]>([]);
@@ -119,7 +121,10 @@ export function UploadCsvForm({
     }));
 
     try {
-      await saveUploadedCsvRowsMutation.mutateAsync(mappedRows);
+      await saveUploadedCsvRowsMutation.mutateAsync({
+        workspaceId,
+        rows: mappedRows,
+      });
       onSaveAction();
     } catch (error) {
       const message =

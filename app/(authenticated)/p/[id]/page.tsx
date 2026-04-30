@@ -1,101 +1,34 @@
-"use client";
+import { notFound } from "next/navigation";
+import { z } from "zod";
 
-import {
-  Background,
-  Controls,
-  MarkerType,
-  ReactFlow,
-  type Edge,
-  type Node,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import { useMemo } from "react";
+import WorkspacesService from "@/core/services/workspaces-service";
+import { createServerContext } from "@/trpc/server/caller";
 
-import {
-  CANDIDATE_CLASSIFICATION_NODE,
-  CandidateClassificationNode,
-  type CandidateClassificationNodeData,
-} from "@/components/nodes/candidate-classification-node";
-import {
-  UPLOAD_CSV_NODE,
-  UploadCsvNode,
-  UploadCsvNodeData,
-} from "@/components/nodes/upload-csv-node";
-import { NodeStatus } from "@/type/note";
+import { WorkspaceFlow } from "../../../../components/workspace-flow";
 
-const nodeTypes = {
-  [CANDIDATE_CLASSIFICATION_NODE]: CandidateClassificationNode,
-  [UPLOAD_CSV_NODE]: UploadCsvNode,
+type PageProps = {
+  params: Promise<{
+    id: string;
+  }>;
 };
 
-const START_X = 80;
-const Y = 120;
-const GAP = 475;
+const workspaceIdSchema = z.uuid();
 
-export default function Page() {
-  const nodes = useMemo<
-    Node<CandidateClassificationNodeData | UploadCsvNodeData>[]
-  >(
-    () => [
-      {
-        id: "upload",
-        type: UPLOAD_CSV_NODE,
-        position: { x: START_X + GAP * 0, y: Y },
-        data: {
-          status: NodeStatus.Initial,
-        },
-        draggable: false,
-      },
-      {
-        id: "classification",
-        type: CANDIDATE_CLASSIFICATION_NODE,
-        position: { x: START_X + GAP * 1, y: Y },
-        data: {
-          status: NodeStatus.Initial,
-        },
-        draggable: false,
-      },
-    ],
-    []
-  );
+export default async function Page({ params }: PageProps) {
+  const { id } = await params;
 
-  const edges: Edge[] = [
-    {
-      id: "upload-to-classification",
-      source: "upload",
-      target: "classification",
-      type: "smoothstep",
-      animated: false,
-      style: {
-        stroke: "var(--muted-foreground/50)",
-        strokeWidth: 1.5,
-        strokeDasharray: "8 4",
-      },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: "var(--muted-foreground/50)",
-      },
-    },
-  ];
+  if (!workspaceIdSchema.safeParse(id).success) {
+    notFound();
+  }
+
+  const ctx = await createServerContext();
+  const workspace = await WorkspacesService.findById(ctx, { id });
+
+  if (!workspace) {
+    notFound();
+  }
 
   return (
-    <div className="w-full flex-1">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        proOptions={{ hideAttribution: true }}
-        fitView
-        nodesDraggable={false}
-        fitViewOptions={{
-          padding: 0.3,
-          maxZoom: 1,
-        }}
-        zoomOnDoubleClick={false}
-      >
-        <Background />
-        <Controls />
-      </ReactFlow>
-    </div>
+    <WorkspaceFlow workspaceId={id} initialFlowState={workspace.flowState} />
   );
 }

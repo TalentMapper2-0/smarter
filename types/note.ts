@@ -3,4 +3,5 @@ export enum NodeStatus {
   Loading = "loading",
   Success = "success",
   Error = "error",
+  ActionRequired = "action-required",
 }

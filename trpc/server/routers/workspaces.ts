@@ -3,7 +3,14 @@ import "server-only";
 import z from "zod";
 
 import WorkspacesService from "@/core/services/workspaces-service";
+import { NodeStatus } from "@/types/note";
 import { protectedProcedure, router } from "../init";
+
+const flowStateSchema = z.object({
+  uploadCsvStatus: z.enum(NodeStatus),
+  candidateClassificationStatus: z.enum(NodeStatus),
+  isEdgeButtonDisabled: z.boolean(),
+});
 
 export const workspacesRouter = router({
   create: protectedProcedure
@@ -41,11 +48,68 @@ export const workspacesRouter = router({
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:
-          error instanceof Error
-            ? error.message
-            : "Failed to list workspaces",
+          error instanceof Error ? error.message : "Failed to list workspaces",
         cause: error,
       });
     }
   }),
+
+  byId: protectedProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        const workspace = await WorkspacesService.findById(ctx, input);
+
+        if (!workspace) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Workspace not found",
+          });
+        }
+
+        return { id: workspace.id, title: workspace.title };
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+
+        console.error("workspaces.byId failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error ? error.message : "Failed to load workspace",
+          cause: error,
+        });
+      }
+    }),
+
+  updateFlowState: protectedProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        flowState: flowStateSchema,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const workspace = await WorkspacesService.updateFlowState(ctx, input);
+        return workspace.flowState;
+      } catch (error) {
+        console.error("workspaces.updateFlowState failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to update workspace flow state",
+          cause: error,
+        });
+      }
+    }),
 });

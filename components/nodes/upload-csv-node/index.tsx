@@ -9,8 +9,9 @@ import {
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo, useState } from "react";
 
-import { NodeStatus, NodeStatusIndicator } from "../../node-status-indicator";
+import { NodeStatusIndicator } from "../../node-status-indicator";
 import { UploadCsvDialog } from "./upload-csv-dialog";
+import { NodeStatus } from "@/types/note";
 
 export const UPLOAD_CSV_NODE = "uploadCsv";
 
@@ -27,6 +28,8 @@ const edgeAnchorStyle = {
 
 export type UploadCsvNodeData = {
   status?: NodeStatus;
+  actionRequiredMessage?: string;
+  workspaceId: string;
 };
 
 export type UploadCsvFlowNode = Node<UploadCsvNodeData, typeof UPLOAD_CSV_NODE>;
@@ -44,7 +47,11 @@ export const UploadCsvNode = memo(({ data }: NodeProps<UploadCsvFlowNode>) => {
           style={edgeAnchorStyle}
         />
 
-        <NodeStatusIndicator status={data?.status} variant="border">
+        <NodeStatusIndicator
+          status={data?.status}
+          variant="border"
+          actionRequiredMessage={data?.actionRequiredMessage}
+        >
           <BaseNode
             onClick={() => setOpen(true)}
             className="min-w-64 transition hover:shadow-md"
@@ -65,7 +72,11 @@ export const UploadCsvNode = memo(({ data }: NodeProps<UploadCsvFlowNode>) => {
           style={edgeAnchorStyle}
         />
       </div>
-      <UploadCsvDialog open={open} onOpenChangeAction={setOpen} />
+      <UploadCsvDialog
+        open={open}
+        onOpenChangeAction={setOpen}
+        workspaceId={data.workspaceId}
+      />
     </>
   );
 });

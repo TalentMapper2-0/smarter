@@ -7,9 +7,9 @@ import { createClient } from "./server";
 async function logOut() {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
-  await supabase.auth.signOut().then(() => {
-    redirect("/login");
-  });
+
+  await supabase.auth.signOut();
+  redirect("/login");
 }
 
 async function signInWithAzure(origin: string) {
@@ -33,7 +33,4 @@ async function signInWithAzure(origin: string) {
   }
 }
 
-export {
-  logOut,
-  signInWithAzure,
-};
+export { logOut, signInWithAzure };

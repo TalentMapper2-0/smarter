@@ -1,15 +1,17 @@
-import { type ReactNode } from "react";
+"use client";
+
 import { LoaderCircle } from "lucide-react";
+import { type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
-
-export type NodeStatus = "loading" | "success" | "error" | "initial";
+import { NodeStatus } from "@/types/note";
 
 export type NodeStatusVariant = "overlay" | "border";
 
 export type NodeStatusIndicatorProps = {
   status?: NodeStatus;
   variant?: NodeStatusVariant;
+  actionRequiredMessage?: string;
   children: ReactNode;
 };
 
@@ -22,7 +24,7 @@ export const SpinnerLoadingIndicator = ({
     <div className="relative">
       <StatusBorder className="border-blue-700/40">{children}</StatusBorder>
 
-      <div className="bg-background/50 absolute inset-0 z-50 rounded-[9px] backdrop-blur-xs" />
+      <div className="absolute inset-0 z-50 rounded-[9px] bg-background/50 backdrop-blur-xs" />
       <div className="absolute inset-0 z-50">
         <span className="absolute top-[calc(50%-1.25rem)] left-[calc(50%-1.25rem)] inline-block h-10 w-10 animate-ping rounded-full bg-blue-700/20" />
 
@@ -77,8 +79,8 @@ const StatusBorder = ({
     <>
       <div
         className={cn(
-          "absolute -top-px -left-px h-[calc(100%+2px)] w-[calc(100%+2px)] rounded-[9px] border-2",
-          className,
+          "pointer-events-none absolute -top-px -left-px z-10 h-[calc(100%+2px)] w-[calc(100%+2px)] rounded-[9px] border-2",
+          className
         )}
       />
       {children}
@@ -86,9 +88,23 @@ const StatusBorder = ({
   );
 };
 
+export const ActionRequiredIndicator = ({
+  children,
+}: {
+  children: ReactNode;
+  message?: string;
+}) => {
+  return (
+    <StatusBorder className="animate-pulse border-orange-500 shadow-[0_0_0_4px_rgba(249,115,22,0.16),0_14px_32px_rgba(249,115,22,0.18)]">
+      {children}
+    </StatusBorder>
+  );
+};
+
 export const NodeStatusIndicator = ({
   status,
   variant = "border",
+  actionRequiredMessage,
   children,
 }: NodeStatusIndicatorProps) => {
   switch (status) {
@@ -107,6 +123,12 @@ export const NodeStatusIndicator = ({
       );
     case "error":
       return <StatusBorder className="border-red-400">{children}</StatusBorder>;
+    case "action-required":
+      return (
+        <ActionRequiredIndicator message={actionRequiredMessage}>
+          {children}
+        </ActionRequiredIndicator>
+      );
     default:
       return <>{children}</>;
   }

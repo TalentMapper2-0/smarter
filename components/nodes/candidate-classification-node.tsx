@@ -8,7 +8,8 @@ import {
 } from "@/components/nodes/base-node";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo } from "react";
-import { NodeStatus, NodeStatusIndicator } from "../node-status-indicator";
+import { NodeStatusIndicator } from "../node-status-indicator";
+import { NodeStatus } from "@/types/note";
 
 export const CANDIDATE_CLASSIFICATION_NODE = "candidateClassification";
 
@@ -21,10 +22,11 @@ const edgeAnchorStyle = {
   background: "transparent",
   opacity: 0,
   transform: "translateY(-50%)",
-}
+};
 
 export type CandidateClassificationNodeData = {
   status?: NodeStatus;
+  actionRequiredMessage?: string;
 };
 
 export type CandidateClassificationFlowNode = Node<
@@ -43,7 +45,11 @@ export const CandidateClassificationNode = memo(
           style={edgeAnchorStyle}
         />
 
-        <NodeStatusIndicator status={data?.status} variant="border">
+        <NodeStatusIndicator
+          status={data?.status}
+          variant="border"
+          actionRequiredMessage={data?.actionRequiredMessage}
+        >
           <BaseNode className="min-w-64">
             <BaseNodeHeader>
               <BaseNodeHeaderTitle>Kandidaat classificeren</BaseNodeHeaderTitle>

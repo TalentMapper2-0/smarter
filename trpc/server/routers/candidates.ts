@@ -8,14 +8,17 @@ import { protectedProcedure, router } from "../init";
 export const candidatesRouter = router({
   create: protectedProcedure
     .input(
-      z.array(
-        z.object({
-          linkedinUrl: z.string(),
-          salesNavigatorId: z.string(),
-          firstName: z.string(),
-          lastName: z.string(),
-        })
-      )
+      z.object({
+        workspaceId: z.uuid(),
+        rows: z.array(
+          z.object({
+            linkedinUrl: z.string(),
+            salesNavigatorId: z.string(),
+            firstName: z.string(),
+            lastName: z.string(),
+          })
+        ),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       try {

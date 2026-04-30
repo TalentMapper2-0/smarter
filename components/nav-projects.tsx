@@ -10,8 +10,10 @@ import {
 import { trpc } from "@/trpc/client/client";
 import { LoaderCircle } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function NavProjects() {
+  const pathname = usePathname();
   const { data: workspaces, isLoading } = trpc.workspaces.listRecent.useQuery();
 
   return (
@@ -27,15 +29,22 @@ export function NavProjects() {
           </SidebarMenuItem>
         )}
 
-        {workspaces?.map((workspace) => (
-          <SidebarMenuItem key={workspace.id}>
-            <SidebarMenuButton asChild>
-              <Link href={`/p/${workspace.id}`}>           
-                <span>{workspace.title}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ))}
+        {workspaces?.map((workspace) => {
+          const href = `/p/${workspace.id}`;
+
+          return (
+            <SidebarMenuItem key={workspace.id}>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === href || pathname.startsWith(`${href}/`)}
+              >
+                <Link href={href}>
+                  <span>{workspace.title}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          );
+        })}
 
         {!isLoading && workspaces?.length === 0 && (
           <SidebarMenuItem>

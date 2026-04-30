@@ -19,6 +19,8 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { useWorkspaceFlowStore } from "@/stores/workspace-flow-store";
+import { trpc } from "@/trpc/client/client";
 
 import { TEXT } from "./constants";
 import { UploadCsvForm } from "./upload-csv-form";
@@ -26,11 +28,23 @@ import { UploadCsvForm } from "./upload-csv-form";
 export function UploadCsvDialog({
   open,
   onOpenChangeAction,
+  workspaceId,
 }: {
   open: boolean;
   onOpenChangeAction: (open: boolean) => void;
+  workspaceId: string;
 }) {
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const utils = trpc.useUtils();
+  const completeCsvUpload = useWorkspaceFlowStore(
+    (state) => state.completeCsvUpload
+  );
+
+  function handleSave() {
+    completeCsvUpload();
+    utils.workspaces.listRecent.invalidate();
+    onOpenChangeAction(false);
+  }
 
   if (isDesktop) {
     return (
@@ -40,7 +54,7 @@ export function UploadCsvDialog({
             <DialogTitle>{TEXT.title}</DialogTitle>
             <DialogDescription>{TEXT.description}</DialogDescription>
           </DialogHeader>
-          <UploadCsvForm onSaveAction={() => onOpenChangeAction(false)} />
+          <UploadCsvForm onSaveAction={handleSave} workspaceId={workspaceId} />
         </DialogContent>
       </Dialog>
     );
@@ -55,7 +69,8 @@ export function UploadCsvDialog({
         </DrawerHeader>
         <UploadCsvForm
           className="px-4"
-          onSaveAction={() => onOpenChangeAction(false)}
+          onSaveAction={handleSave}
+          workspaceId={workspaceId}
         />
         <DrawerFooter className="pt-2">
           <DrawerClose asChild>

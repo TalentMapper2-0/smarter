@@ -1,7 +1,6 @@
 import { Context } from "@/trpc/server/init";
-import WorkspacesRepository, {
-  type Workspace,
-} from "../repositories/workspaces-repository";
+import WorkspacesRepository from "../repositories/workspaces-repository";
+import { Workspace, WorkspaceFlowStateSnapshot } from "@/types/workspace";
 
 export default class WorkspacesService {
   static async create(
@@ -24,5 +23,40 @@ export default class WorkspacesService {
     }
 
     return WorkspacesRepository.listByUser(ctx, ctx.user.id);
+  }
+
+  static async findById(
+    ctx: Context,
+    { id }: { id: string }
+  ): Promise<Workspace | null> {
+    if (!ctx.user) {
+      throw new Error("Not authenticated");
+    }
+
+    return WorkspacesRepository.findByIdForUser(ctx, {
+      id,
+      userId: ctx.user.id,
+    });
+  }
+
+  static async updateFlowState(
+    ctx: Context,
+    { id, flowState }: { id: string; flowState: WorkspaceFlowStateSnapshot }
+  ): Promise<Workspace> {
+    if (!ctx.user) {
+      throw new Error("Not authenticated");
+    }
+
+    const workspace = await WorkspacesRepository.updateFlowStateForUser(ctx, {
+      id,
+      userId: ctx.user.id,
+      flowState,
+    });
+
+    if (!workspace) {
+      throw new Error("Workspace not found");
+    }
+
+    return workspace;
   }
 }

@@ -1,5 +1,7 @@
 import { Context } from "@/trpc/server/init";
 import CandidatesRepository from "../repositories/candidates-repository";
+import WorkspacesRepository from "../repositories/workspaces-repository";
+import { NodeStatus } from "@/types/note";
 
 type UploadedCandidateRow = {
   linkedinUrl: string;
@@ -8,11 +10,38 @@ type UploadedCandidateRow = {
   lastName: string;
 };
 
+type CreateCandidatesInput = {
+  workspaceId: string;
+  rows: UploadedCandidateRow[];
+};
+
 export default class CandidatesService {
   static async create(
     ctx: Context,
-    rows: UploadedCandidateRow[]
+    input: CreateCandidatesInput
   ): Promise<void> {
-    return CandidatesRepository.create(ctx, rows);
+    if (!ctx.user) {
+      throw new Error("Not authenticated");
+    }
+
+    const workspace = await WorkspacesRepository.findByIdForUser(ctx, {
+      id: input.workspaceId,
+      userId: ctx.user.id,
+    });
+
+    if (!workspace) {
+      throw new Error("Workspace not found");
+    }
+
+    await CandidatesRepository.create(ctx, input);
+    await WorkspacesRepository.updateFlowStateForUser(ctx, {
+      id: input.workspaceId,
+      userId: ctx.user.id,
+      flowState: {
+        uploadCsvStatus: NodeStatus.Success,
+        candidateClassificationStatus: NodeStatus.Initial,
+        isEdgeButtonDisabled: false,
+      },
+    });
   }
 }

@@ -1,40 +1,32 @@
 "use client";
 
-import { useMediaQuery } from "@/hooks/use-media-query";
-
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useWorkspaceFlowStore } from "@/stores/workspace-flow-store";
 import { trpc } from "@/trpc/client/client";
 
 import { TEXT } from "./constants";
 import { UploadCsvForm } from "./upload-csv-form";
+import type { UploadedCandidateData } from "@/core/repositories/candidates-repository";
 
 export function UploadCsvDialog({
+  isLocked,
   open,
   onOpenChangeAction,
   workspaceId,
+  initialUploadData,
 }: {
+  isLocked: boolean;
   open: boolean;
   onOpenChangeAction: (open: boolean) => void;
   workspaceId: string;
+  initialUploadData: UploadedCandidateData | null;
 }) {
-  const isDesktop = useMediaQuery("(min-width: 768px)");
   const utils = trpc.useUtils();
   const completeCsvUpload = useWorkspaceFlowStore(
     (state) => state.completeCsvUpload
@@ -42,42 +34,27 @@ export function UploadCsvDialog({
 
   function handleSave() {
     completeCsvUpload();
+    utils.candidates.getUpload.invalidate({ workspaceId });
     utils.workspaces.listRecent.invalidate();
     onOpenChangeAction(false);
   }
 
-  if (isDesktop) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChangeAction}>
-        <DialogContent className="sm:max-w-106.25">
-          <DialogHeader>
-            <DialogTitle>{TEXT.title}</DialogTitle>
-            <DialogDescription>{TEXT.description}</DialogDescription>
-          </DialogHeader>
-          <UploadCsvForm onSaveAction={handleSave} workspaceId={workspaceId} />
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
   return (
-    <Drawer open={open} onOpenChange={onOpenChangeAction}>
-      <DrawerContent>
-        <DrawerHeader className="text-left">
-          <DrawerTitle>{TEXT.title}</DrawerTitle>
-          <DrawerDescription>{TEXT.description}</DrawerDescription>
-        </DrawerHeader>
+    <Sheet open={open} onOpenChange={onOpenChangeAction}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-150">
+        <SheetHeader>
+          <SheetTitle>{TEXT.title}</SheetTitle>
+          <SheetDescription>{TEXT.description}</SheetDescription>
+        </SheetHeader>
         <UploadCsvForm
           className="px-4"
+          isLocked={isLocked}
+          open={open}
           onSaveAction={handleSave}
           workspaceId={workspaceId}
+          initialUploadData={initialUploadData}
         />
-        <DrawerFooter className="pt-2">
-          <DrawerClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DrawerClose>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
+      </SheetContent>
+    </Sheet>
   );
 }

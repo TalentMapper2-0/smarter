@@ -1,6 +1,7 @@
 export const TEXT = {
-  title: "CSV uploaden",
-  description: "Upload een CSV en koppel de kolommen aan de juiste velden.",
+  title: "Uploadgegevens toevoegen",
+  description:
+    "Upload een CSV, voeg de vacature toe en koppel de kolommen aan de juiste velden.",
 };
 
 export const REQUIRED_FIELDS = [

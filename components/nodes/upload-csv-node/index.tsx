@@ -12,6 +12,7 @@ import { memo, useState } from "react";
 import { NodeStatusIndicator } from "../../node-status-indicator";
 import { UploadCsvDialog } from "./upload-csv-dialog";
 import { NodeStatus } from "@/types/note";
+import type { UploadedCandidateData } from "@/core/repositories/candidates-repository";
 
 export const UPLOAD_CSV_NODE = "uploadCsv";
 
@@ -30,6 +31,8 @@ export type UploadCsvNodeData = {
   status?: NodeStatus;
   actionRequiredMessage?: string;
   workspaceId: string;
+  initialUploadData: UploadedCandidateData | null;
+  isLocked?: boolean;
 };
 
 export type UploadCsvFlowNode = Node<UploadCsvNodeData, typeof UPLOAD_CSV_NODE>;
@@ -39,7 +42,7 @@ export const UploadCsvNode = memo(({ data }: NodeProps<UploadCsvFlowNode>) => {
 
   return (
     <>
-      <div className="relative">
+      <div className="relative h-full">
         <Handle
           type="target"
           position={Position.Left}
@@ -54,13 +57,15 @@ export const UploadCsvNode = memo(({ data }: NodeProps<UploadCsvFlowNode>) => {
         >
           <BaseNode
             onClick={() => setOpen(true)}
-            className="min-w-64 transition hover:shadow-md"
+            className="h-full min-w-64 transition hover:shadow-md"
           >
             <BaseNodeHeader>
-              <BaseNodeHeaderTitle>CSV uploaden</BaseNodeHeaderTitle>
+              <BaseNodeHeaderTitle>
+                Uploadgegevens toevoegen
+              </BaseNodeHeaderTitle>
             </BaseNodeHeader>
             <BaseNodeContent className="pt-0 text-sm text-muted-foreground">
-              Klik om een CSV te uploaden en het proces te starten.
+              Klik om een CSV, vacature en eventuele opmerking toe te voegen.
             </BaseNodeContent>
           </BaseNode>
         </NodeStatusIndicator>
@@ -76,6 +81,8 @@ export const UploadCsvNode = memo(({ data }: NodeProps<UploadCsvFlowNode>) => {
         open={open}
         onOpenChangeAction={setOpen}
         workspaceId={data.workspaceId}
+        initialUploadData={data.initialUploadData}
+        isLocked={data.isLocked ?? false}
       />
     </>
   );

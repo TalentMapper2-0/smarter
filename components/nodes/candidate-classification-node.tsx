@@ -67,7 +67,7 @@ export const CandidateClassificationNode = memo(
     const hasResult = data?.status === NodeStatus.Success;
 
     return (
-      <div className="relative">
+      <div className="relative h-full">
         <Handle
           type="target"
           position={Position.Left}
@@ -80,7 +80,7 @@ export const CandidateClassificationNode = memo(
           variant="border"
           actionRequiredMessage={data?.actionRequiredMessage}
         >
-          <BaseNode className={hasResult ? "min-w-80" : "min-w-64"}>
+          <BaseNode className={cn("h-full", hasResult ? "min-w-80" : "min-w-64")}>
             <BaseNodeHeader>
               <BaseNodeHeaderTitle>Kandidaat classificeren</BaseNodeHeaderTitle>
               {hasResult ? (

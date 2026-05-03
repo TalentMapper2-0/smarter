@@ -14,11 +14,13 @@ import { FIELD_LABELS, type RequiredField } from "./constants";
 
 export function ColumnMappingField({
   columns,
+  disabled = false,
   field,
   onChange,
   value,
 }: {
   columns: string[];
+  disabled?: boolean;
   field: RequiredField;
   onChange: (value: string) => void;
   value: string;
@@ -29,6 +31,7 @@ export function ColumnMappingField({
     <Field>
       <FieldLabel htmlFor={inputId}>{FIELD_LABELS[field]}</FieldLabel>
       <Select
+        disabled={disabled}
         value={value || "__none__"}
         onValueChange={(nextValue) =>
           onChange(nextValue === "__none__" ? "" : nextValue)

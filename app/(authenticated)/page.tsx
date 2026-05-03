@@ -89,7 +89,7 @@ export default async function Page() {
   ).length;
 
   return (
-    <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <main className="flex flex-1 flex-col gap-6 p-4 md:p-6 max-w-7xl mx-auto w-full">
       <section className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         <div className="flex min-h-70 flex-col justify-between rounded-xl bg-primary p-6 text-primary-foreground md:p-8">
           <div className="flex flex-col gap-4">

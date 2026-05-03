@@ -8,7 +8,8 @@ import {
   WorkspaceFlowStage,
 } from "@/types/workspace";
 
-type WorkspaceFlowState = WorkspaceFlowStateSnapshot & {
+type WorkspaceFlowState = Omit<WorkspaceFlowStateSnapshot, "flowStage"> & {
+  flowStage: WorkspaceFlowStage | null;
   workspaceId: string | null;
   setWorkspaceFlow: (
     flowState: WorkspaceFlowStateSnapshot,
@@ -21,16 +22,20 @@ type WorkspaceFlowState = WorkspaceFlowStateSnapshot & {
 
 export const useWorkspaceFlowStore = create<WorkspaceFlowState>((set, get) => ({
   ...defaultWorkspaceFlowState,
+  flowStage: null,
   workspaceId: null,
+
   setWorkspaceFlow: (flowState, workspaceId) =>
     set((state) => ({
       ...flowState,
       workspaceId: workspaceId ?? state.workspaceId,
     })),
+
   completeCsvUpload: () =>
     set({
       flowStage: WorkspaceFlowStage.ReadyToClassify,
     }),
+
   startCandidateClassification: () => {
     if (get().flowStage !== WorkspaceFlowStage.ReadyToClassify) {
       return;
@@ -40,9 +45,11 @@ export const useWorkspaceFlowStore = create<WorkspaceFlowState>((set, get) => ({
       flowStage: WorkspaceFlowStage.Classifying,
     });
   },
+
   resetWorkspaceFlow: () =>
     set({
       ...defaultWorkspaceFlowState,
+      flowStage: null,
       workspaceId: null,
     }),
 }));

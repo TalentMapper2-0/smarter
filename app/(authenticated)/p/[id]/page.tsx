@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { z } from "zod";
 
 import WorkspacesService from "@/core/services/workspaces-service";
 import { createServerContext } from "@/trpc/server/caller";
@@ -12,14 +11,8 @@ type PageProps = {
   }>;
 };
 
-const workspaceIdSchema = z.uuid();
-
 export default async function Page({ params }: PageProps) {
   const { id } = await params;
-
-  if (!workspaceIdSchema.safeParse(id).success) {
-    notFound();
-  }
 
   const ctx = await createServerContext();
   const workspace = await WorkspacesService.findById(ctx, { id });

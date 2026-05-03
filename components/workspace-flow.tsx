@@ -56,7 +56,7 @@ const DEFAULT_NODE_SIZE = {
   width: 256,
   height: 112,
 };
-const INITIAL_FIT_VIEW_MAX_ZOOM = 0.75;
+const INITIAL_FIT_VIEW_MAX_ZOOM = 0.9;
 
 function withDefaultNodeSize<TNode extends WorkspaceNode>(node: TNode): TNode {
   return {
@@ -73,19 +73,19 @@ export function WorkspaceFlow({
   workspaceId: string;
   initialFlowState: WorkspaceFlowStateSnapshot;
 }) {
-  const {
-    storeWorkspaceId,
-    flowStage,
-    setWorkspaceFlow,
-  } = useWorkspaceFlowStore(
-    useShallow((state) => ({
-      storeWorkspaceId: state.workspaceId,
-      flowStage: state.flowStage,
-      setWorkspaceFlow: state.setWorkspaceFlow,
-    }))
-  );
+  const { storeWorkspaceId, flowStage, setWorkspaceFlow } =
+    useWorkspaceFlowStore(
+      useShallow((state) => ({
+        storeWorkspaceId: state.workspaceId,
+        flowStage: state.flowStage,
+        setWorkspaceFlow: state.setWorkspaceFlow,
+      }))
+    );
+
   const currentFlowStage =
-    storeWorkspaceId === workspaceId ? flowStage : initialFlowState.flowStage;
+    storeWorkspaceId === workspaceId && flowStage !== null
+      ? flowStage
+      : initialFlowState.flowStage;
 
   useEffect(() => {
     setWorkspaceFlow(initialFlowState, workspaceId);
@@ -163,7 +163,7 @@ export function WorkspaceFlow({
         fitView
         nodesDraggable={false}
         fitViewOptions={{
-          padding: 0.3,
+          padding: 0.6,
           maxZoom: INITIAL_FIT_VIEW_MAX_ZOOM,
         }}
         translateExtent={[

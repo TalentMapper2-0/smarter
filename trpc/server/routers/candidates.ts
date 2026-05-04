@@ -29,6 +29,29 @@ export const candidatesRouter = router({
       }
     }),
 
+  listClassificationRows: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.uuid(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await CandidatesService.listClassificationRows(ctx, input);
+      } catch (error) {
+        console.error("candidates.listClassificationRows failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to fetch classification rows",
+          cause: error,
+        });
+      }
+    }),
+
   create: protectedProcedure
     .input(
       z.object({
@@ -57,6 +80,29 @@ export const candidatesRouter = router({
             error instanceof Error
               ? error.message
               : "Failed to create candidates",
+          cause: error,
+        });
+      }
+    }),
+
+  classify: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.uuid(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await CandidatesService.classify(ctx, input);
+      } catch (error) {
+        console.error("candidates.classify failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to classify candidates",
           cause: error,
         });
       }

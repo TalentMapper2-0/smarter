@@ -1,13 +1,13 @@
+import type { UploadedCandidateData } from "@/core/repositories/candidates-repository";
 import {
   MarkerType,
+  type CoordinateExtent,
   type Edge,
   type EdgeTypes,
   type Node,
   type NodeOrigin,
   type NodeTypes,
-  type CoordinateExtent,
 } from "@xyflow/react";
-import type { UploadedCandidateData } from "@/core/repositories/candidates-repository";
 
 import {
   EDGE_WITH_BUTTON,
@@ -24,7 +24,6 @@ import {
   UploadCsvNode,
   type UploadCsvNodeData,
 } from "@/components/nodes/upload-csv-node";
-import { NodeStatus } from "@/types/note";
 import {
   getWorkspaceNodeStatuses,
   WorkspaceFlowStage,
@@ -49,11 +48,6 @@ export const edgeColor = "var(--muted-foreground/50)";
 export const DEFAULT_NODE_SIZE = {
   width: 256,
   height: 112,
-} as const;
-
-export const CLASSIFICATION_RESULT_NODE_SIZE = {
-  width: 320,
-  height: 260,
 } as const;
 
 export const INITIAL_FIT_VIEW_MAX_ZOOM = 0.9;
@@ -84,7 +78,7 @@ export function withDefaultNodeSize<TNode extends WorkspaceNode>(
 
 function withNodeSize<TNode extends WorkspaceNode>(
   node: TNode,
-  size: typeof DEFAULT_NODE_SIZE | typeof CLASSIFICATION_RESULT_NODE_SIZE
+  size: typeof DEFAULT_NODE_SIZE
 ): TNode {
   return {
     ...node,
@@ -125,10 +119,7 @@ export function getWorkspaceFlowNodes({
     draggable: false,
   });
 
-  const classificationNodeSize =
-    candidateClassificationStatus === NodeStatus.Success
-      ? CLASSIFICATION_RESULT_NODE_SIZE
-      : DEFAULT_NODE_SIZE;
+  const classificationNodeSize = DEFAULT_NODE_SIZE;
 
   const classificationNode: WorkspaceNode = withNodeSize(
     {
@@ -139,9 +130,6 @@ export function getWorkspaceFlowNodes({
         status: candidateClassificationStatus,
       },
       draggable: false,
-      style: {
-        pointerEvents: "none",
-      },
     },
     classificationNodeSize
   );
@@ -152,11 +140,16 @@ export function getWorkspaceFlowNodes({
 export function getWorkspaceFlowEdges({
   flowStage,
   workspaceId,
+  onClassify,
 }: {
   flowStage: WorkspaceFlowStage;
   workspaceId: string;
+  onClassify: () => void;
 }): Edge[] {
-  const isEdgeButtonDisabled = flowStage !== WorkspaceFlowStage.ReadyToClassify;
+  const canClassify =
+    flowStage === WorkspaceFlowStage.ReadyToClassify ||
+    flowStage === WorkspaceFlowStage.ClassificationFailed;
+  const isEdgeButtonDisabled = !canClassify;
 
   return [
     {
@@ -179,6 +172,7 @@ export function getWorkspaceFlowEdges({
       data: {
         disable: isEdgeButtonDisabled,
         workspaceId,
+        onClassify,
       },
     },
   ];

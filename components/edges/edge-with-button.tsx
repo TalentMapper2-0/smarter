@@ -12,7 +12,6 @@ import { Play, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useWorkspaceFlowStore } from "@/stores/workspace-flow-store";
-import { trpc } from "@/trpc/client/client";
 import { WorkspaceFlowStage } from "@/types/workspace";
 
 export const EDGE_WITH_BUTTON = "edge-with-button";
@@ -20,6 +19,7 @@ export const EDGE_WITH_BUTTON = "edge-with-button";
 export type EdgeWithButtonData = {
   disable: boolean;
   workspaceId: string;
+  onClassify: () => void;
 };
 
 export type EdgeWithButtonFlowEdge = Edge<
@@ -40,14 +40,7 @@ export function EdgeWithButton({
   data,
 }: EdgeProps<EdgeWithButtonFlowEdge>) {
   const isDisabled = data?.disable ?? false;
-  const workspaceId = data?.workspaceId;
-  const updateFlowStateMutation = trpc.workspaces.updateFlowState.useMutation();
-  const startCandidateClassification = useWorkspaceFlowStore(
-    (state) => state.startCandidateClassification
-  );
-  const setWorkspaceFlow = useWorkspaceFlowStore(
-    (state) => state.setWorkspaceFlow
-  );
+  const onClassify = data?.onClassify;
 
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
@@ -78,44 +71,10 @@ export function EdgeWithButton({
             className={cn("h-7 w-7 rounded-full disabled:opacity-100")}
             onClick={(event) => {
               event.stopPropagation();
-              if (isDisabled) {
+              if (isDisabled || !onClassify) {
                 return;
               }
-              startCandidateClassification();
-              if (!workspaceId) {
-                return;
-              }
-
-              const loadingFlowState = {
-                flowStage: WorkspaceFlowStage.Classifying,
-              };
-              const successFlowState = {
-                flowStage: WorkspaceFlowStage.Complete,
-              };
-
-              updateFlowStateMutation.mutate(
-                {
-                  id: workspaceId,
-                  flowState: loadingFlowState,
-                },
-                {
-                  onSuccess: (flowState) => {
-                    setWorkspaceFlow(flowState);
-
-                    window.setTimeout(() => {
-                      setWorkspaceFlow(successFlowState);
-                      updateFlowStateMutation.mutate({
-                        id: workspaceId,
-                        flowState: successFlowState,
-                      });
-                    }, 5000);
-                  },
-                  onError: () =>
-                    setWorkspaceFlow({
-                      flowStage: WorkspaceFlowStage.ReadyToClassify,
-                    }),
-                }
-              );
+              onClassify();
             }}
           >
             {isDisabled ? (

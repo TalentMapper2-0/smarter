@@ -15,6 +15,23 @@ type CreateCandidatesInput = {
   rows: UploadedCandidateRow[];
 };
 
+export type CandidateClassificationResult = {
+  linkedinUrl: string;
+  label: string;
+  explanation: string;
+  status: string;
+};
+
+export type CandidateClassificationRow = {
+  id: string;
+  linkedinUrl: string;
+  salesNavigatorId: string;
+  name: string;
+  label: string;
+  explanation: string;
+  status: string;
+};
+
 export type UploadedCandidateData = {
   vacancyText: string;
   commentText: string;
@@ -145,6 +162,68 @@ export default class CandidatesRepository {
 
       if (commentError) {
         throw commentError;
+      }
+    }
+  }
+
+  static async listClassificationRowsByWorkspaceId(
+    ctx: Context,
+    { workspaceId }: { workspaceId: string }
+  ): Promise<CandidateClassificationRow[]> {
+    const { supabase } = ctx;
+
+    const { data, error } = await supabase
+      .from("classify_candidates")
+      .select(
+        "id,linkedin_url,sales_navigator_id,name,label,explanation,status"
+      )
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      linkedinUrl: row.linkedin_url ?? "",
+      salesNavigatorId: row.sales_navigator_id ?? "",
+      name: row.name ?? "",
+      label: row.label ?? "",
+      explanation: row.explanation ?? "",
+      status: row.status ?? "",
+    }));
+  }
+
+  static async saveClassificationResults(
+    ctx: Context,
+    {
+      workspaceId,
+      results,
+    }: { workspaceId: string; results: CandidateClassificationResult[] }
+  ): Promise<void> {
+    const { supabase } = ctx;
+
+    for (const result of results) {
+      const { data, error } = await supabase
+        .from("classify_candidates")
+        .update({
+          explanation: result.explanation,
+          label: result.label,
+          status: result.status,
+        })
+        .eq("workspace_id", workspaceId)
+        .eq("linkedin_url", result.linkedinUrl)
+        .select("id");
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.length) {
+        throw new Error(
+          `No uploaded candidate found for LinkedIn URL: ${result.linkedinUrl}`
+        );
       }
     }
   }

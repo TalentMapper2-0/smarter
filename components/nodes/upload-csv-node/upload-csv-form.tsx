@@ -58,15 +58,13 @@ const formSchema = z.object({
 export function UploadCsvForm({
   className,
   isLocked,
-  open,
   onSaveAction,
   workspaceId,
   initialUploadData,
 }: {
   className?: string;
   isLocked: boolean;
-  open: boolean;
-  onSaveAction: () => void;
+  onSaveAction: () => void | Promise<void>;
   workspaceId: string;
   initialUploadData: UploadedCandidateData | null;
 }) {
@@ -161,7 +159,7 @@ export function UploadCsvForm({
         commentText: form.getValues("commentText")?.trim() || undefined,
         rows: mappedRows,
       });
-      onSaveAction();
+      await onSaveAction();
     } catch (error) {
       const message =
         error instanceof Error && error.message

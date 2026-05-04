@@ -1,13 +1,15 @@
 "use client";
 
-import { Background, Controls, MiniMap, ReactFlow } from "@xyflow/react";
+import { Background, Controls, MiniMap, Panel, ReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useWorkspaceFlowStore } from "@/stores/workspace-flow-store";
 import type { WorkspaceFlowStateSnapshot } from "@/types/workspace";
+import { WorkspaceFlowStage } from "@/types/workspace";
 import type { UploadedCandidateData } from "@/core/repositories/candidates-repository";
+import { trpc } from "@/trpc/client/client";
 
 import {
   edgeTypes,
@@ -19,6 +21,7 @@ import {
   WORKSPACE_FLOW_TRANSLATE_EXTENT,
 } from "./workspace-flow-config";
 import { WorkspaceFlowLoader } from "./workspace-flow-loader";
+import { FlowAlertPanel } from "../panels/alert-panel";
 
 export function WorkspaceFlow({
   workspaceId,
@@ -31,14 +34,42 @@ export function WorkspaceFlow({
 }) {
   const [hasInitializedStore, setHasInitializedStore] = useState(false);
 
-  const { storeWorkspaceId, flowStage, setWorkspaceFlow } =
-    useWorkspaceFlowStore(
-      useShallow((state) => ({
-        storeWorkspaceId: state.workspaceId,
-        flowStage: state.flowStage,
-        setWorkspaceFlow: state.setWorkspaceFlow,
-      }))
-    );
+  const {
+    storeWorkspaceId,
+    flowStage,
+    setWorkspaceFlow,
+    startCandidateClassification,
+  } = useWorkspaceFlowStore(
+    useShallow((state) => ({
+      storeWorkspaceId: state.workspaceId,
+      flowStage: state.flowStage,
+      setWorkspaceFlow: state.setWorkspaceFlow,
+      startCandidateClassification: state.startCandidateClassification,
+    }))
+  );
+
+  const classifyCandidatesMutation = trpc.candidates.classify.useMutation({
+    onSuccess: (flowState) => {
+      setWorkspaceFlow(flowState);
+    },
+    onError: () =>
+      setWorkspaceFlow({
+        flowStage: WorkspaceFlowStage.ClassificationFailed,
+      }),
+  });
+
+  const onClassify = useCallback(() => {
+    startCandidateClassification();
+    setWorkspaceFlow({
+      flowStage: WorkspaceFlowStage.Classifying,
+    });
+    classifyCandidatesMutation.mutate({ workspaceId });
+  }, [
+    workspaceId,
+    startCandidateClassification,
+    setWorkspaceFlow,
+    classifyCandidatesMutation,
+  ]);
 
   useEffect(() => {
     let isActive = true;
@@ -81,8 +112,9 @@ export function WorkspaceFlow({
       getWorkspaceFlowEdges({
         flowStage: currentFlowStage,
         workspaceId,
+        onClassify,
       }),
-    [currentFlowStage, workspaceId]
+    [currentFlowStage, workspaceId, onClassify]
   );
 
   if (!isFlowReady) {
@@ -101,7 +133,6 @@ export function WorkspaceFlow({
         fitView
         nodesDraggable={false}
         nodesConnectable={false}
-        // elementsSelectable={false}
         panOnDrag
         fitViewOptions={{
           padding: 0.8,
@@ -113,6 +144,11 @@ export function WorkspaceFlow({
         <Background />
         <Controls showInteractive={false} />
         <MiniMap nodeStrokeWidth={3} />
+        <FlowAlertPanel
+          status="success"
+          title="Saved"
+          message="Your flow was saved successfully."
+        />
       </ReactFlow>
     </div>
   );

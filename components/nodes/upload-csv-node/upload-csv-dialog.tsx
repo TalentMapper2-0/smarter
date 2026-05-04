@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import {
   Sheet,
   SheetContent,
@@ -27,15 +29,19 @@ export function UploadCsvDialog({
   workspaceId: string;
   initialUploadData: UploadedCandidateData | null;
 }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const completeCsvUpload = useWorkspaceFlowStore(
     (state) => state.completeCsvUpload
   );
 
-  function handleSave() {
+  async function handleSave() {
     completeCsvUpload();
-    utils.candidates.getUpload.invalidate({ workspaceId });
-    utils.workspaces.listRecent.invalidate();
+    await Promise.all([
+      utils.candidates.getUpload.invalidate({ workspaceId }),
+      utils.workspaces.listRecent.invalidate(),
+    ]);
+    router.refresh();
     onOpenChangeAction(false);
   }
 
@@ -49,7 +55,6 @@ export function UploadCsvDialog({
         <UploadCsvForm
           className="px-4"
           isLocked={isLocked}
-          open={open}
           onSaveAction={handleSave}
           workspaceId={workspaceId}
           initialUploadData={initialUploadData}

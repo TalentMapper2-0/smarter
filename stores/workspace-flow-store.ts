@@ -37,7 +37,10 @@ export const useWorkspaceFlowStore = create<WorkspaceFlowState>((set, get) => ({
     }),
 
   startCandidateClassification: () => {
-    if (get().flowStage !== WorkspaceFlowStage.ReadyToClassify) {
+    if (
+      get().flowStage !== WorkspaceFlowStage.ReadyToClassify &&
+      get().flowStage !== WorkspaceFlowStage.ClassificationFailed
+    ) {
       return;
     }
 

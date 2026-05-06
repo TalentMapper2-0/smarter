@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { trpc } from "@/trpc/client/client";
 import { createClient } from "@/utils/supabase/client";
 import { ChevronLeftIcon, ExternalLinkIcon } from "lucide-react";
@@ -34,15 +35,50 @@ type Props = {
 };
 
 function getStatusVariant(status: string) {
-  if (status.toLowerCase() === "completed") {
+  const normalizedStatus = status.toLowerCase();
+
+  if (normalizedStatus === "success" || normalizedStatus === "classified") {
     return "default";
   }
 
-  if (status.toLowerCase() === "failed") {
+  if (normalizedStatus === "failed") {
     return "destructive";
   }
 
   return "outline";
+}
+
+function getStatusLabel(status: string) {
+  switch (status.toLowerCase()) {
+    case "classifying":
+      return "Classificeren";
+    case "success":
+      return "Voltooid";
+    case "classified":
+      return "Geclassificeerd";
+    case "failed":
+      return "Mislukt";
+    default:
+      return status;
+  }
+}
+
+function CandidateStatus({ status }: { status: string }) {
+  if (status.toLowerCase() === "classifying") {
+    return (
+      <Badge variant="outline" className="inline-flex items-center gap-1.5">
+        <Spinner className="size-3 shrink-0" />
+        {getStatusLabel(status)}
+      </Badge>
+    );
+  }
+
+  console.log("Rendering status badge with status:", status);
+  console.log("Status variant:", getStatusVariant(status));
+
+  return (
+    <Badge variant={getStatusVariant(status)}>{getStatusLabel(status)}</Badge>
+  );
 }
 
 export default function CandidateClassificationDialog({
@@ -112,13 +148,20 @@ export default function CandidateClassificationDialog({
               <div className="p-6">
                 <div className="w-full">
                   <div className="overflow-hidden rounded-md border">
-                    <Table>
+                    <Table className="table-fixed">
+                      <colgroup>
+                        <col className="w-72" />
+                        <col className="w-36" />
+                        <col className="w-40" />
+                        <col className="w-[32rem]" />
+                        <col className="w-28" />
+                      </colgroup>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="min-w-48">Kandidaat</TableHead>
+                          <TableHead>Kandidaat</TableHead>
                           <TableHead>Label</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead className="min-w-96">Uitleg</TableHead>
+                          <TableHead>Uitleg</TableHead>
                           <TableHead className="text-right">Profiel</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -136,9 +179,11 @@ export default function CandidateClassificationDialog({
                             <TableRow key={row.id}>
                               <TableCell className="font-medium">
                                 <div className="flex flex-col">
-                                  <span>{row.name || "Naam onbekend"}</span>
+                                  <span className="truncate">
+                                    {row.name || "Naam onbekend"}
+                                  </span>
                                   {row.salesNavigatorId ? (
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="truncate text-xs text-muted-foreground">
                                       {row.salesNavigatorId}
                                     </span>
                                   ) : null}
@@ -155,9 +200,7 @@ export default function CandidateClassificationDialog({
                               </TableCell>
                               <TableCell>
                                 {row.status ? (
-                                  <Badge variant={getStatusVariant(row.status)}>
-                                    {row.status}
-                                  </Badge>
+                                  <CandidateStatus status={row.status} />
                                 ) : (
                                   <Badge variant="outline">Wachtend</Badge>
                                 )}
@@ -211,11 +254,11 @@ export default function CandidateClassificationDialog({
             </DialogDescription>
           </DialogHeader>
         </ScrollArea>
-        <DialogFooter className="px-6 pb-6 sm:justify-end">
+        <DialogFooter className="mx-0 mb-0 px-6 py-4 sm:justify-end items-center">
           <DialogClose asChild>
             <Button variant="outline">
               <ChevronLeftIcon />
-              Back
+              Terug
             </Button>
           </DialogClose>
           {rowsQuery.isError ? (

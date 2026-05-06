@@ -27,6 +27,7 @@ import {
   WorkspaceFlowStage,
 } from "@/types/workspace";
 import { NodeStatus } from "@/types/note";
+import { Spinner } from "@/components/ui/spinner";
 
 function getFirstName(email: string) {
   const name = email
@@ -89,7 +90,7 @@ export default async function Page() {
   ).length;
 
   return (
-    <main className="flex flex-1 flex-col gap-6 p-4 md:p-6 max-w-7xl mx-auto w-full">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 md:p-6">
       <section className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         <div className="flex min-h-70 flex-col justify-between rounded-xl bg-primary p-6 text-primary-foreground md:p-8">
           <div className="flex flex-col gap-4">
@@ -118,7 +119,6 @@ export default async function Page() {
             ) : null}
           </div>
         </div>
-
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
           <Card>
             <CardHeader>

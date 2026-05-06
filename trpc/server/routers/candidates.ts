@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { after } from "next/server";
 import "server-only";
 import z from "zod";
 
@@ -93,7 +94,20 @@ export const candidatesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await CandidatesService.classify(ctx, input);
+        const flowState = await CandidatesService.startClassification(
+          ctx,
+          input
+        );
+
+        after(async () => {
+          try {
+            await CandidatesService.runClassification(ctx, input);
+          } catch (error) {
+            console.error("candidates.classify background job failed", error);
+          }
+        });
+
+        return flowState;
       } catch (error) {
         console.error("candidates.classify failed", error);
 

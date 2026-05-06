@@ -120,7 +120,7 @@ export default class CandidatesService {
     });
   }
 
-  static async classify(
+  static async startClassification(
     ctx: Context,
     input: ClassifyCandidatesInput
   ): Promise<{ flowStage: WorkspaceFlowStage }> {
@@ -160,6 +160,10 @@ export default class CandidatesService {
       throw new Error("No LinkedIn profile URLs found.");
     }
 
+    await CandidatesRepository.markClassificationStarted(ctx, {
+      workspaceId: input.workspaceId,
+    });
+
     await WorkspacesRepository.updateFlowStateForUser(ctx, {
       id: input.workspaceId,
       userId: ctx.user.id,
@@ -167,6 +171,46 @@ export default class CandidatesService {
         flowStage: WorkspaceFlowStage.Classifying,
       },
     });
+
+    return { flowStage: WorkspaceFlowStage.Classifying };
+  }
+
+  static async runClassification(
+    ctx: Context,
+    input: ClassifyCandidatesInput
+  ): Promise<{ flowStage: WorkspaceFlowStage }> {
+    if (!ctx.user) {
+      throw new Error("Not authenticated");
+    }
+
+    const workspace = await WorkspacesRepository.findByIdForUser(ctx, {
+      id: input.workspaceId,
+      userId: ctx.user.id,
+    });
+
+    if (!workspace) {
+      throw new Error("Workspace not found");
+    }
+
+    if (workspace.flowState.flowStage !== WorkspaceFlowStage.Classifying) {
+      throw new Error("This workspace is not currently classifying.");
+    }
+
+    const upload = await CandidatesRepository.findUploadByWorkspaceId(ctx, {
+      workspaceId: input.workspaceId,
+    });
+
+    if (!upload) {
+      throw new Error("No uploaded candidates found.");
+    }
+
+    const profilesList = upload.rows
+      .map((row) => row.linkedinUrl.trim())
+      .filter(Boolean);
+
+    if (!profilesList.length) {
+      throw new Error("No LinkedIn profile URLs found.");
+    }
 
     const requestBody: OrchestratorClassifyRequest = {
       service_name: "Classification_Agent",
@@ -225,6 +269,10 @@ export default class CandidatesService {
 
       return { flowStage: WorkspaceFlowStage.Complete };
     } catch (error) {
+      await CandidatesRepository.markPendingClassificationFailed(ctx, {
+        workspaceId: input.workspaceId,
+      });
+
       await WorkspacesRepository.updateFlowStateForUser(ctx, {
         id: input.workspaceId,
         userId: ctx.user.id,

@@ -2,7 +2,7 @@
 
 import { Background, Controls, MiniMap, ReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { useWorkspaceFlowStore } from "@/stores/workspace-flow-store";
@@ -96,14 +96,33 @@ export function WorkspaceFlow({
       ? flowStage
       : initialFlowState.flowStage;
 
+  // Track whether we should auto-open results after classification completes
+  const [autoOpenResults, setAutoOpenResults] = useState(false);
+  const prevFlowStageRef = useRef(currentFlowStage);
+
+  useEffect(() => {
+    const prevStage = prevFlowStageRef.current;
+    prevFlowStageRef.current = currentFlowStage;
+
+    // Auto-open results when transitioning from Classifying to Complete
+    if (
+      prevStage === WorkspaceFlowStage.Classifying &&
+      currentFlowStage === WorkspaceFlowStage.Complete
+    ) {
+      setAutoOpenResults(true);
+    }
+  }, [currentFlowStage]);
+
   const nodes = useMemo(
     () =>
       getWorkspaceFlowNodes({
         flowStage: currentFlowStage,
         workspaceId,
         initialUploadData,
+        onClassify,
+        autoOpenResults,
       }),
-    [currentFlowStage, workspaceId, initialUploadData]
+    [currentFlowStage, workspaceId, initialUploadData, onClassify, autoOpenResults]
   );
 
   const edges = useMemo(

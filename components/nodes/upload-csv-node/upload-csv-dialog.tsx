@@ -22,12 +22,14 @@ export function UploadCsvDialog({
   onOpenChangeAction,
   workspaceId,
   initialUploadData,
+  onClassify,
 }: {
   isLocked: boolean;
   open: boolean;
   onOpenChangeAction: (open: boolean) => void;
   workspaceId: string;
   initialUploadData: UploadedCandidateData | null;
+  onClassify?: () => void;
 }) {
   const router = useRouter();
   const utils = trpc.useUtils();
@@ -45,6 +47,17 @@ export function UploadCsvDialog({
     onOpenChangeAction(false);
   }
 
+  async function handleSaveAndClassify() {
+    completeCsvUpload();
+    await Promise.all([
+      utils.candidates.getUpload.invalidate({ workspaceId }),
+      utils.workspaces.listRecent.invalidate(),
+    ]);
+    router.refresh();
+    onOpenChangeAction(false);
+    onClassify?.();
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChangeAction}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-150">
@@ -56,6 +69,7 @@ export function UploadCsvDialog({
           className="px-4"
           isLocked={isLocked}
           onSaveAction={handleSave}
+          onSaveAndClassifyAction={onClassify ? handleSaveAndClassify : undefined}
           workspaceId={workspaceId}
           initialUploadData={initialUploadData}
         />

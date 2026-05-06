@@ -195,6 +195,45 @@ export default class CandidatesRepository {
     }));
   }
 
+  static async markClassificationStarted(
+    ctx: Context,
+    { workspaceId }: { workspaceId: string }
+  ): Promise<void> {
+    const { supabase } = ctx;
+
+    const { error } = await supabase
+      .from("classify_candidates")
+      .update({
+        explanation: null,
+        label: null,
+        status: "classifying",
+      })
+      .eq("workspace_id", workspaceId);
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  static async markPendingClassificationFailed(
+    ctx: Context,
+    { workspaceId }: { workspaceId: string }
+  ): Promise<void> {
+    const { supabase } = ctx;
+
+    const { error } = await supabase
+      .from("classify_candidates")
+      .update({
+        status: "failed",
+      })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "classifying");
+
+    if (error) {
+      throw error;
+    }
+  }
+
   static async saveClassificationResults(
     ctx: Context,
     {

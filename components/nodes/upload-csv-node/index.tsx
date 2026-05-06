@@ -33,6 +33,7 @@ export type UploadCsvNodeData = {
   workspaceId: string;
   initialUploadData: UploadedCandidateData | null;
   isLocked?: boolean;
+  onClassify?: () => void;
 };
 
 export type UploadCsvFlowNode = Node<UploadCsvNodeData, typeof UPLOAD_CSV_NODE>;
@@ -83,6 +84,7 @@ export const UploadCsvNode = memo(({ data }: NodeProps<UploadCsvFlowNode>) => {
         workspaceId={data.workspaceId}
         initialUploadData={data.initialUploadData}
         isLocked={data.isLocked ?? false}
+        onClassify={data.onClassify}
       />
     </>
   );

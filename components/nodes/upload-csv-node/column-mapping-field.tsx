@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { cn } from "@/lib/utils";
 
 import { FIELD_LABELS, type RequiredField } from "./constants";
 
@@ -16,12 +17,14 @@ export function ColumnMappingField({
   columns,
   disabled = false,
   field,
+  isError = false,
   onChange,
   value,
 }: {
   columns: string[];
   disabled?: boolean;
   field: RequiredField;
+  isError?: boolean;
   onChange: (value: string) => void;
   value: string;
 }) {
@@ -29,7 +32,13 @@ export function ColumnMappingField({
 
   return (
     <Field>
-      <FieldLabel htmlFor={inputId}>{FIELD_LABELS[field]}</FieldLabel>
+      <FieldLabel
+        htmlFor={inputId}
+        className={cn(isError && "text-destructive")}
+      >
+        {FIELD_LABELS[field]}
+        {isError ? " *" : ""}
+      </FieldLabel>
       <Select
         disabled={disabled}
         value={value || "__none__"}
@@ -37,7 +46,11 @@ export function ColumnMappingField({
           onChange(nextValue === "__none__" ? "" : nextValue)
         }
       >
-        <SelectTrigger id={inputId} className="w-full" size="sm">
+        <SelectTrigger
+          id={inputId}
+          className={cn("w-full", isError && "border-destructive ring-destructive/30 ring-1")}
+          size="sm"
+        >
           <SelectValue placeholder="Niet gekoppeld" />
         </SelectTrigger>
         <SelectContent position="popper">

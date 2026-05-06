@@ -8,7 +8,7 @@ import {
 } from "@/components/nodes/base-node";
 import { NodeStatus } from "@/types/note";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { NodeStatusIndicator } from "../../node-status-indicator";
 import CandidateClassificationDialog from "./candidate-classification-dialog";
 
@@ -29,6 +29,7 @@ export type CandidateClassificationNodeData = {
   workspaceId: string;
   status?: NodeStatus;
   actionRequiredMessage?: string;
+  autoOpen?: boolean;
 };
 
 export type CandidateClassificationFlowNode = Node<
@@ -39,6 +40,14 @@ export type CandidateClassificationFlowNode = Node<
 export const CandidateClassificationNode = memo(
   ({ data }: NodeProps<CandidateClassificationFlowNode>) => {
     const [open, setOpen] = useState(false);
+
+    // Auto-open the results dialog when classification completes
+    useEffect(() => {
+      if (data.autoOpen) {
+        setOpen(true);
+      }
+    }, [data.autoOpen]);
+
     return (
       <>
         <div className="relative">

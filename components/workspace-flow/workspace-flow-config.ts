@@ -96,10 +96,14 @@ export function getWorkspaceFlowNodes({
   flowStage,
   workspaceId,
   initialUploadData,
+  onClassify,
+  autoOpenResults,
 }: {
   flowStage: WorkspaceFlowStage;
   workspaceId: string;
   initialUploadData: UploadedCandidateData | null;
+  onClassify?: () => void;
+  autoOpenResults?: boolean;
 }): WorkspaceNode[] {
   const { uploadCsvStatus, candidateClassificationStatus } =
     getWorkspaceNodeStatuses(flowStage);
@@ -115,6 +119,7 @@ export function getWorkspaceFlowNodes({
       isLocked:
         flowStage !== WorkspaceFlowStage.NeedsCsv &&
         flowStage !== WorkspaceFlowStage.ReadyToClassify,
+      onClassify,
     },
     draggable: false,
   });
@@ -129,6 +134,7 @@ export function getWorkspaceFlowNodes({
       data: {
         status: candidateClassificationStatus,
         workspaceId,
+        autoOpen: autoOpenResults,
       },
       draggable: false,
     },

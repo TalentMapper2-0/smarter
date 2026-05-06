@@ -1,6 +1,6 @@
 "use client";
 
-import { Background, Controls, MiniMap, Panel, ReactFlow } from "@xyflow/react";
+import { Background, Controls, MiniMap, ReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -21,7 +21,6 @@ import {
   WORKSPACE_FLOW_TRANSLATE_EXTENT,
 } from "./workspace-flow-config";
 import { WorkspaceFlowLoader } from "./workspace-flow-loader";
-import { FlowAlertPanel } from "../panels/alert-panel";
 
 export function WorkspaceFlow({
   workspaceId,
@@ -144,11 +143,11 @@ export function WorkspaceFlow({
         <Background />
         <Controls showInteractive={false} />
         <MiniMap nodeStrokeWidth={3} />
-        <FlowAlertPanel
+        {/* <FlowAlertPanel
           status="success"
           title="Saved"
           message="Your flow was saved successfully."
-        />
+        /> */}
       </ReactFlow>
     </div>
   );

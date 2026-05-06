@@ -18,7 +18,7 @@ import {
   CANDIDATE_CLASSIFICATION_NODE,
   CandidateClassificationNode,
   type CandidateClassificationNodeData,
-} from "@/components/nodes/candidate-classification-node";
+} from "@/components/nodes/classificiation-node/candidate-classification-node";
 import {
   UPLOAD_CSV_NODE,
   UploadCsvNode,
@@ -128,6 +128,7 @@ export function getWorkspaceFlowNodes({
       position: CLASSIFICATION_NODE_POSITION,
       data: {
         status: candidateClassificationStatus,
+        workspaceId,
       },
       draggable: false,
     },

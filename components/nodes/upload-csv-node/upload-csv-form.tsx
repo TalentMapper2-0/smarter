@@ -264,11 +264,11 @@ export function UploadCsvForm({
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-800">
             <div className="flex items-center gap-2 text-sm font-medium">
               <AlertTriangle className="size-4" />
-              Upload locked
+              Upload vergrendeld
             </div>
             <p className="text-sm">
-              This data can no longer be changed because the next step has
-              already processed it.
+              Deze gegevens kunnen niet meer worden gewijzigd, omdat de
+              volgende stap ze al heeft verwerkt.
             </p>
           </div>
         ) : null}

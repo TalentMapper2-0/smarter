@@ -20,6 +20,5 @@ export async function createServerContext(): Promise<Context> {
           email: user.email ?? "",
         }
       : null,
-    isAdmin: user?.app_metadata?.role === "admin",
   };
 }

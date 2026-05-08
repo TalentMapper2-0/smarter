@@ -5,7 +5,6 @@ import { transformer } from "../client/transformer";
 export type Context = {
   supabase: SupabaseClient;
   user: { id: string; email: string } | null;
-  isAdmin: boolean;
 };
 
 const t = initTRPC.context<Context>().create({
@@ -20,16 +19,6 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: "Not authenticated",
-    });
-  }
-  return next();
-});
-
-export const adminProcedure = t.procedure.use(({ ctx, next }) => {
-  if (!ctx.isAdmin) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Not authorized",
     });
   }
   return next();

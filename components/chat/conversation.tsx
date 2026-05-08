@@ -314,7 +314,7 @@ export default function AgentConversation({ chat }: Props) {
                 message.role === ChatMessageRole.Assistant ? (
                   <ChatCsvDropzone
                     isUploading={updateChatStatus.isPending}
-                    onCsvSelected={handleCsvSelected}
+                    onCsvSelectedAction={handleCsvSelected}
                     selectedFile={selectedCsvFile}
                   />
                 ) : null}
@@ -351,7 +351,7 @@ export default function AgentConversation({ chat }: Props) {
                   columns={csvColumns}
                   disabled={updateChatStatus.isPending}
                   mapping={columnMapping}
-                  onChange={(nextMapping) => {
+                  onChangeAction={(nextMapping) => {
                     void handleColumnMappingChange(nextMapping);
                   }}
                 />
@@ -386,7 +386,7 @@ export default function AgentConversation({ chat }: Props) {
                     ? "Kolommen zijn gekoppeld"
                     : "Stuur een bericht"
           }
-          onSubmit={handleChatSubmit}
+          onSubmitAction={handleChatSubmit}
         />
       </div>
     </div>

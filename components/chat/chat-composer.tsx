@@ -12,14 +12,14 @@ type ChatComposerProps = {
   disabled?: boolean;
   isSubmitting?: boolean;
   placeholder?: string;
-  onSubmit: (message: string) => void | Promise<void>;
+  onSubmitAction: (message: string) => void | Promise<void>;
 };
 
 export function ChatComposer({
   disabled = false,
   isSubmitting = false,
   placeholder = "Stuur een bericht",
-  onSubmit,
+  onSubmitAction: onSubmit,
 }: ChatComposerProps) {
   return (
     <PromptInput

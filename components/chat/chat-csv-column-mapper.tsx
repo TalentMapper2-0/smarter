@@ -8,14 +8,14 @@ type ChatCsvColumnMapperProps = {
   columns: string[];
   disabled?: boolean;
   mapping: ColumnMapping;
-  onChange: (nextMapping: ColumnMapping) => void;
+  onChangeAction: (nextMapping: ColumnMapping) => void;
 };
 
 export function ChatCsvColumnMapper({
   columns,
   disabled = false,
   mapping,
-  onChange,
+  onChangeAction: onChange,
 }: ChatCsvColumnMapperProps) {
   const hasMissingFields = REQUIRED_FIELDS.some((field) => !mapping[field]);
 

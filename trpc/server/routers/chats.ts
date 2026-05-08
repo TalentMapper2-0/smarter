@@ -134,4 +134,27 @@ export const chatsRouter = router({
         });
       }
     }),
+  saveVacancy: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        vacancyText: z.string(),
+        fileName: z.string(),
+        fileSize: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ChatsService.saveVacancy(ctx, input);
+      } catch (error) {
+        console.error("chat.saveVacancy failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error ? error.message : "Failed to save vacancy",
+          cause: error,
+        });
+      }
+    }),
 });

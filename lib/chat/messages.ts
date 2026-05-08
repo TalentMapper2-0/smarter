@@ -16,6 +16,8 @@ export const messages = {
 
   csvReuploadOk:
     "Oké, probeer het bestand opnieuw te uploaden.",
+  vacancyRequest: "Plak de vacaturetekst hieronder.",
+  vacancyUploaded: "Vacature succesvol geüpload. Heb je nog opmerkingen?",
 } as const;
 
 export type MessageKey = keyof typeof messages;

@@ -33,6 +33,7 @@ export default function AgentConversation({ chat }: Props) {
   const reuploadCsv = trpc.chat.reuploadCsv.useMutation();
   const saveMappedCsv = trpc.chat.saveMappedCsv.useMutation();
   const uploadCsvMetadata = trpc.chat.uploadCsvMetadata.useMutation();
+  const saveVacancy = trpc.chat.saveVacancy.useMutation();
   const [streamedInitialMessage, setStreamedInitialMessage] = useState({
     chatId: chat.id,
     content: "",
@@ -78,13 +79,13 @@ export default function AgentConversation({ chat }: Props) {
   const isMappingCsvColumns = currentStatus === ChatStatus.MappingCsvColumns;
   const isNeedsCsvColumnMapping =
     currentStatus === ChatStatus.NeedsCsvColumnMapping;
-  const isCsvColumnsMapped = currentStatus === ChatStatus.CsvColumnsMapped;
+  const isWaitingForVacancy = currentStatus === ChatStatus.WaitingForVacancy;
+  const isWaitingForComment = currentStatus === ChatStatus.WaitingForComment;
   const isChatInputDisabled =
     shouldStreamInitialMessage ||
     isWaitingForCsvInput ||
     isMappingCsvColumns ||
-    isNeedsCsvColumnMapping ||
-    isCsvColumnsMapped;
+    isNeedsCsvColumnMapping;
   const messages = [
     {
       id: `chat-title-${chat.id}`,
@@ -94,13 +95,13 @@ export default function AgentConversation({ chat }: Props) {
     },
     ...(shouldStreamInitialMessage
       ? [
-          {
-            id: `chat-initial-message-${chat.id}`,
-            chatId: chat.id,
-            role: ChatMessageRole.Assistant,
-            content: initialMessageContent,
-          },
-        ]
+        {
+          id: `chat-initial-message-${chat.id}`,
+          chatId: chat.id,
+          role: ChatMessageRole.Assistant,
+          content: initialMessageContent,
+        },
+      ]
       : []),
     ...(chat.messages ?? []),
   ];
@@ -236,7 +237,7 @@ export default function AgentConversation({ chat }: Props) {
         Boolean(nextMapping[field])
       );
       const nextStatus = allFieldsMapped
-        ? ChatStatus.CsvColumnsMapped
+        ? ChatStatus.WaitingForVacancy
         : ChatStatus.NeedsCsvColumnMapping;
 
       await uploadCsvMetadata.mutateAsync({
@@ -290,7 +291,7 @@ export default function AgentConversation({ chat }: Props) {
       return;
     }
 
-    const nextStatus = ChatStatus.CsvColumnsMapped;
+    const nextStatus = ChatStatus.WaitingForVacancy;
 
     setOptimisticStatus({
       chatId: chat.id,
@@ -360,7 +361,22 @@ export default function AgentConversation({ chat }: Props) {
     }
   };
 
-  const handleChatSubmit = async () => {};
+  const handleChatSubmit = async (content: string) => {
+    if (isWaitingForVacancy) {
+      try {
+        await saveVacancy.mutateAsync({
+          chatId: chat.id,
+          vacancyText: content,
+          fileName: "Gekopieerde tekst",
+          fileSize: content.length,
+        });
+
+        router.refresh();
+      } catch (error) {
+        console.error("Failed to save vacancy", error);
+      }
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -372,8 +388,8 @@ export default function AgentConversation({ chat }: Props) {
               {message.content && (
                 <MessageContent>
                   {shouldStreamInitialMessage &&
-                  index === 1 &&
-                  message.role === ChatMessageRole.Assistant ? (
+                    index === 1 &&
+                    message.role === ChatMessageRole.Assistant ? (
                     <MessageResponse isAnimating>
                       {message.content}
                     </MessageResponse>
@@ -395,8 +411,8 @@ export default function AgentConversation({ chat }: Props) {
               ))}
 
               {isWaitingForCsvInput &&
-              index === messages.length - 1 &&
-              message.role === ChatMessageRole.Assistant ? (
+                index === messages.length - 1 &&
+                message.role === ChatMessageRole.Assistant ? (
                 <ChatCsvDropzone
                   isUploading={updateChatStatus.isPending}
                   onCsvSelectedAction={handleCsvSelected}
@@ -446,11 +462,19 @@ export default function AgentConversation({ chat }: Props) {
             </Message>
           ) : null}
 
-          {isCsvColumnsMapped ? (
+          {isWaitingForVacancy ? (
+            <Message from={ChatMessageRole.Assistant}>
+              <MessageContent>
+                <MessageResponse>{chatMessages.vacancyRequest}</MessageResponse>
+              </MessageContent>
+            </Message>
+          ) : null}
+
+          {isWaitingForComment ? (
             <Message from={ChatMessageRole.Assistant}>
               <MessageContent>
                 <MessageResponse>
-                  {chatMessages.csvColumnsMatched}
+                  {chatMessages.vacancyUploaded}
                 </MessageResponse>
               </MessageContent>
             </Message>
@@ -469,9 +493,11 @@ export default function AgentConversation({ chat }: Props) {
                 ? "Kolommen worden gecontroleerd"
                 : isNeedsCsvColumnMapping
                   ? "Koppel eerst de CSV-kolommen"
-                  : isCsvColumnsMapped
-                    ? "Kolommen zijn gekoppeld"
-                    : "Stuur een bericht"
+                  : isWaitingForVacancy
+                    ? "Plak de vacaturetekst om door te gaan"
+                    : isWaitingForComment
+                      ? "Heb je nog opmerkingen?"
+                      : "Stuur een bericht"
           }
           onSubmitAction={handleChatSubmit}
         />

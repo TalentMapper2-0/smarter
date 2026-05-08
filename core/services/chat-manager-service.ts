@@ -57,7 +57,8 @@ export default class ChatManagerService {
       case ChatStatus.WaitingForCsvInput:
       case ChatStatus.MappingCsvColumns:
       case ChatStatus.NeedsCsvColumnMapping:
-      case ChatStatus.CsvColumnsMapped:
+      case ChatStatus.WaitingForVacancy:
+      case ChatStatus.WaitingForComment:
         return { type: "empty" };
 
       default:

@@ -104,7 +104,7 @@ export default class CandidatesService {
     if (
       chat.status !== ChatStatus.NeedsCsvColumnMapping &&
       chat.status !== ChatStatus.ReadyToClassify &&
-      chat.status !== ChatStatus.CsvColumnsMapped
+      chat.status !== ChatStatus.WaitingForVacancy
     ) {
       throw new Error(
         "This upload can no longer be changed because the next step has already processed the data."

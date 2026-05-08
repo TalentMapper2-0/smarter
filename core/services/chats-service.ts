@@ -149,7 +149,51 @@ export default class ChatsService {
     await ChatsRepository.updateStatusForUser(ctx, {
       id: chatId,
       userId: ctx.user.id,
-      status: ChatStatus.CsvColumnsMapped,
+      status: ChatStatus.WaitingForVacancy,
+    });
+  }
+
+  static async saveVacancy(
+    ctx: Context,
+    {
+      chatId,
+      vacancyText,
+      fileName,
+      fileSize,
+    }: {
+      chatId: string;
+      vacancyText: string;
+      fileName: string;
+      fileSize: number;
+    }
+  ) {
+    if (!ctx.user) {
+      throw new Error("Not authenticated");
+    }
+
+    await ChatsRepository.addMessage(ctx, {
+      chatId,
+      userId: ctx.user.id,
+      role: ChatMessageRole.User,
+      content: fileName === "Gekopieerde tekst" ? vacancyText : null,
+      file:
+        fileName !== "Gekopieerde tekst"
+          ? {
+            name: fileName,
+            size: fileSize,
+          }
+          : undefined,
+    });
+
+    await ChatsRepository.saveVacancy(ctx, {
+      chatId,
+      vacancyText,
+    });
+
+    await ChatsRepository.updateStatusForUser(ctx, {
+      id: chatId,
+      userId: ctx.user.id,
+      status: ChatStatus.WaitingForComment,
     });
   }
 }

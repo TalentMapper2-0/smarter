@@ -218,6 +218,37 @@ export default class ChatsRepository {
     }
   }
 
+  static async saveVacancy(
+    ctx: Context,
+    {
+      chatId,
+      vacancyText,
+    }: {
+      chatId: string;
+      vacancyText: string;
+    }
+  ) {
+    const { supabase } = ctx;
+
+    const { error: deleteError } = await supabase
+      .from("classify_vacancies")
+      .delete()
+      .eq("chat_id", chatId);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    const { error } = await supabase.from("classify_vacancies").insert({
+      chat_id: chatId,
+      vacancy_text: vacancyText,
+    });
+
+    if (error) {
+      throw error;
+    }
+  }
+
   static async findByIdForUser(
     ctx: Context,
     { id, userId }: { id: string; userId: string }

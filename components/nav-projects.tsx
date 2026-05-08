@@ -30,7 +30,7 @@ export function NavProjects() {
         )}
 
         {chats?.map((chat) => {
-          const href = `/p/${chat.id}`;
+          const href = `/c/${chat.id}`;
 
           return (
             <SidebarMenuItem key={chat.id}>

@@ -46,7 +46,8 @@ function formatDate(value: string) {
 
 function getCompletedSteps(chat: Chat) {
   const isUploadComplete =
-    chat.status === ChatStatus.CsvColumnsMapped ||
+    chat.status === ChatStatus.WaitingForVacancy ||
+    chat.status === ChatStatus.WaitingForComment ||
     chat.status === ChatStatus.ReadyToClassify ||
     chat.status === ChatStatus.ClassifyingCandidates ||
     chat.status === ChatStatus.ClassificationComplete ||
@@ -55,8 +56,15 @@ function getCompletedSteps(chat: Chat) {
   const isClassificationComplete =
     chat.status === ChatStatus.ClassificationComplete;
 
+  const isVacancyComplete =
+    chat.status === ChatStatus.WaitingForComment ||
+    chat.status === ChatStatus.ReadyToClassify ||
+    chat.status === ChatStatus.ClassifyingCandidates ||
+    chat.status === ChatStatus.ClassificationComplete;
+
   let completed = 0;
   if (isUploadComplete) completed += 1;
+  if (isVacancyComplete) completed += 1;
   if (isClassificationComplete) completed += 1;
 
   return completed;
@@ -72,6 +80,10 @@ function getChatStatus(chat: Chat) {
       return "Aandacht nodig (Classificatie gefaald)";
     case ChatStatus.ReadyToClassify:
       return "Wachten op classificatie";
+    case ChatStatus.WaitingForComment:
+      return "Wachten op opmerking";
+    case ChatStatus.WaitingForVacancy:
+      return "Wachten op vacature";
     case ChatStatus.NeedsCsvColumnMapping:
       return "Kolommen koppelen";
     case ChatStatus.MappingCsvColumns:
@@ -95,6 +107,8 @@ export default async function Page() {
     [
       ChatStatus.WaitingForCsvInput,
       ChatStatus.NeedsCsvColumnMapping,
+      ChatStatus.WaitingForVacancy,
+      ChatStatus.WaitingForComment,
       ChatStatus.ReadyToClassify,
       ChatStatus.ClassificationFailed,
     ].includes(chat.status)
@@ -188,7 +202,7 @@ export default async function Page() {
                         {getChatStatus(chat)}
                       </Badge>
                       <span className="text-sm text-muted-foreground">
-                        {getCompletedSteps(chat)}/2 stappen
+                        {getCompletedSteps(chat)}/3 stappen
                       </span>
                       <ArrowRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                     </div>

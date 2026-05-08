@@ -17,7 +17,6 @@ type ChatCsvDropzoneProps = {
   disabled?: boolean;
   isUploading?: boolean;
   onCsvSelectedAction?: (file: File) => void | Promise<void>;
-  selectedFile?: ChatSelectedCsvFile | null;
 };
 
 export function ChatCsvDropzone({
@@ -25,7 +24,6 @@ export function ChatCsvDropzone({
   disabled = false,
   isUploading = false,
   onCsvSelectedAction: onCsvSelected,
-  selectedFile = null,
 }: ChatCsvDropzoneProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -50,28 +48,8 @@ export function ChatCsvDropzone({
     }
   };
 
-  if (selectedFile) {
-    return (
-      <div className={cn("w-full max-w-md", className)}>
-        <div className="flex items-center gap-3 rounded-2xl bg-muted/40 px-4 py-3 border">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background">
-            <FileText className="size-4 text-foreground" />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">
-              {selectedFile.name}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {formatFileSize(selectedFile.size)}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={cn("mt-4 max-w-md", className)}>
+    <div className={cn("max-w-md", className)}>
       <div
         role="button"
         tabIndex={disabled || isUploading ? -1 : 0}
@@ -157,6 +135,32 @@ export function ChatCsvDropzone({
       </div>
 
       {error ? <FieldError className="mt-2">{error}</FieldError> : null}
+    </div>
+  );
+}
+
+export function ChatCsvFileAttachment({
+  className,
+  file,
+}: {
+  className?: string;
+  file: ChatSelectedCsvFile;
+}) {
+  return (
+    <div className={cn("w-full max-w-md", className)}>
+      <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background">
+          <FileText className="size-4 text-foreground" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-foreground">
+            {file.name}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {formatFileSize(file.size)}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

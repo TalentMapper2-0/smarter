@@ -3,7 +3,7 @@ import { CandidateCreate } from "@/types/candidate";
 import { Chat, ChatMessage, ChatMessageRole, ChatStatus } from "@/types/chat";
 
 const chatSelect =
-  "id, title, userId:user_id, status, createdAt:created_at, messages (id, role, chatId:chat_id, content, files:message_files (id, messageId:message_id, name, size))";
+  "id, title, userId:user_id, status, createdAt:created_at, messages (id, role, chatId:chat_id, content, createdAt:created_at, files:message_files (id, messageId:message_id, name, size))";
 
 export default class ChatsRepository {
   static async create(ctx: Context, title: string): Promise<Chat> {
@@ -27,11 +27,19 @@ export default class ChatsRepository {
       throw chatError;
     }
 
+    await ChatsRepository.addMessage(ctx, {
+      chatId: chat.id,
+      userId: user.id,
+      content: title,
+      role: ChatMessageRole.User,
+    });
+
     const { data, error } = await supabase
       .from("chats")
       .select(chatSelect)
       .eq("id", chat.id)
       .eq("user_id", user.id)
+      .order("created_at", { referencedTable: "messages", ascending: true })
       .single();
 
     if (error) {
@@ -41,7 +49,7 @@ export default class ChatsRepository {
     return data;
   }
 
-  static async createMessageIfEmptyAndUpdateStatus(
+  static async createMessageAndUpdateStatus(
     ctx: Context,
     {
       chatId,
@@ -74,36 +82,6 @@ export default class ChatsRepository {
       return null;
     }
 
-    const { data: existingMessage, error: existingMessageError } =
-      await supabase
-        .from("messages")
-        .select("id, role, chatId:chat_id, content")
-        .eq("chat_id", chatId)
-        .limit(1)
-        .maybeSingle();
-
-    if (existingMessageError) {
-      throw existingMessageError;
-    }
-
-    if (existingMessage) {
-      return existingMessage;
-    }
-
-    const { data: message, error: messageError } = await supabase
-      .from("messages")
-      .insert({
-        chat_id: chatId,
-        role,
-        content,
-      })
-      .select("id, role, chatId:chat_id, content")
-      .single();
-
-    if (messageError) {
-      throw messageError;
-    }
-
     if (nextStatus) {
       const { error: statusError } = await supabase
         .from("chats")
@@ -116,6 +94,20 @@ export default class ChatsRepository {
       if (statusError) {
         throw statusError;
       }
+    }
+
+    const { data: message, error: messageError } = await supabase
+      .from("messages")
+      .insert({
+        chat_id: chatId,
+        role,
+        content,
+      })
+      .select("id, role, chatId:chat_id, content, createdAt:created_at")
+      .single();
+
+    if (messageError) {
+      throw messageError;
     }
 
     return message;
@@ -164,7 +156,7 @@ export default class ChatsRepository {
         role,
         content,
       })
-      .select("id, role, chatId:chat_id, content")
+      .select("id, role, chatId:chat_id, content, createdAt:created_at")
       .single();
 
     if (messageError) {
@@ -172,19 +164,27 @@ export default class ChatsRepository {
     }
 
     if (file) {
-      const { error: fileError } = await supabase.from("message_files").insert({
-        message_id: message.id,
-        name: file.name,
-        size: file.size,
-      });
+      const { data: messageFile, error: fileError } = await supabase
+        .from("message_files")
+        .insert({
+          message_id: message.id,
+          name: file.name,
+          size: file.size,
+        })
+        .select("id, messageId:message_id, name, size")
+        .single();
 
       if (fileError) {
         throw fileError;
       }
-      
+
+      if (!messageFile) {
+        throw new Error("Message file was not created");
+      }
+
       return {
         ...message,
-        files: [{ id: "temp", messageId: message.id, name: file.name, size: file.size }],
+        files: [messageFile],
       };
     }
 
@@ -205,7 +205,7 @@ export default class ChatsRepository {
     const { supabase } = ctx;
 
     const rows = candidates.map((row) => ({
-      workspace_id: chatId,
+      chat_id: chatId,
       linkedin_url: row.linkedinUrl,
       sales_navigator_id: row.salesNavigatorId ?? null,
       name: [row.firstName, row.lastName].filter(Boolean).join(" ").trim(),
@@ -260,6 +260,7 @@ export default class ChatsRepository {
       .select(chatSelect)
       .eq("id", id)
       .eq("user_id", userId)
+      .order("created_at", { referencedTable: "messages", ascending: true })
       .maybeSingle();
 
     if (error) {
@@ -291,6 +292,7 @@ export default class ChatsRepository {
       .eq("id", id)
       .eq("user_id", userId)
       .select(chatSelect)
+      .order("created_at", { referencedTable: "messages", ascending: true })
       .maybeSingle();
 
     if (error) {
@@ -305,18 +307,19 @@ export default class ChatsRepository {
     { userId }: { userId: string }
   ): Promise<Chat[]> {
     const { supabase } = ctx;
-    
+
     const { data, error } = await supabase
       .from("chats")
       .select(chatSelect)
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
+      .order("created_at", { referencedTable: "messages", ascending: true })
       .limit(20);
 
     if (error) {
       throw error;
     }
-    
+
     return data;
   }
 }

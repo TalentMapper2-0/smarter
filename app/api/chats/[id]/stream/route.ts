@@ -1,6 +1,7 @@
 import "server-only";
 
 import ChatManagerService from "@/core/services/chat-manager-service";
+import { messages as chatMessages, type MessageKey } from "@/lib/chat/messages";
 import { createServerContext } from "@/trpc/server/caller";
 import z from "zod";
 
@@ -13,14 +14,18 @@ type RouteContext = {
 };
 
 const chatIdSchema = z.uuid();
+const messageKeys = Object.keys(chatMessages) as [MessageKey, ...MessageKey[]];
+const requestSchema = z.object({
+  messageKey: z.enum(messageKeys).optional(),
+});
 
 const streamHeaders = {
   "Cache-Control": "no-cache, no-transform",
-  "Content-Type": "text/plain; charset=utf-8",
+  "Content-Type": "application/x-ndjson; charset=utf-8",
   "X-Accel-Buffering": "no",
 };
 
-export async function POST(_request: Request, { params }: RouteContext) {
+export async function POST(request: Request, { params }: RouteContext) {
   const { id } = await params;
   const parsedChatId = chatIdSchema.safeParse(id);
 
@@ -34,8 +39,26 @@ export async function POST(_request: Request, { params }: RouteContext) {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  const rawBody = await request.text();
+  let requestBody: unknown = {};
+
+  if (rawBody) {
+    try {
+      requestBody = JSON.parse(rawBody);
+    } catch {
+      return new Response("Invalid stream request", { status: 400 });
+    }
+  }
+
+  const parsedBody = requestSchema.safeParse(requestBody);
+
+  if (!parsedBody.success) {
+    return new Response("Invalid stream request", { status: 400 });
+  }
+
   const plan = await ChatManagerService.getNextStreamPlan(ctx, {
     chatId: parsedChatId.data,
+    ...parsedBody.data,
   });
 
   if (plan.type === "not-found") {
@@ -58,7 +81,15 @@ export async function POST(_request: Request, { params }: RouteContext) {
               return;
             }
 
-            controller.enqueue(encoder.encode(chunk));
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({
+                  type: "chunk",
+                  content: chunk,
+                }) + "\n"
+              )
+            );
+
             await wait(35);
           }
 
@@ -69,6 +100,15 @@ export async function POST(_request: Request, { params }: RouteContext) {
               role: plan.message.role,
               nextStatus: plan.nextStatus,
             });
+
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({
+                  type: "done",
+                  nextStatus: plan.nextStatus,
+                }) + "\n"
+              )
+            );
           }
 
           controller.close();

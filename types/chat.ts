@@ -36,7 +36,8 @@ export type ChatMessage = {
   id: string;
   chatId: string;
   role: ChatMessageRole;
-  content: string;
+  content: string | null;
+  createdAt?: string;
   files?: MessageFile[];
 };
 

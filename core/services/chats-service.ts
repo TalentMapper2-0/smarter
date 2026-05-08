@@ -1,6 +1,6 @@
 import { Context } from "@/trpc/server/init";
 import ChatsRepository from "../repositories/chats-repository";
-import { Chat, ChatStatus, ChatMessageRole } from "@/types/chat";
+import { Chat, ChatMessage, ChatStatus, ChatMessageRole } from "@/types/chat";
 import { CandidateCreate } from "@/types/candidate";
 
 export default class ChatsService {
@@ -64,35 +64,23 @@ export default class ChatsService {
       fileName: string;
       fileSize: number;
     }
-  ) {
+  ): Promise<ChatMessage> {
     if (!ctx.user) {
       throw new Error("Not authenticated");
     }
 
-    const formatFileSize = (size: number) => {
-      if (size < 1024) return `${size} B`;
-      if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KB`;
-      return `${(size / (1024 * 1024)).toFixed(2)} MB`;
-    };
+    void fileName;
+    void fileSize;
 
-    await ChatsRepository.addMessage(ctx, {
+    return ChatsRepository.addMessage(ctx, {
       chatId,
       userId: ctx.user.id,
-      content: `Geüpload bestand: ${fileName} (${formatFileSize(fileSize)})`,
+      content: null,
       role: ChatMessageRole.User,
-    });
-
-    await ChatsRepository.addMessage(ctx, {
-      chatId,
-      userId: ctx.user.id,
-      content: "Oké, probeer het bestand opnieuw te uploaden.",
-      role: ChatMessageRole.Assistant,
-    });
-
-    await ChatsRepository.updateStatusForUser(ctx, {
-      id: chatId,
-      userId: ctx.user.id,
-      status: ChatStatus.WaitingForCsvInput,
+      file: {
+        name: fileName,
+        size: fileSize,
+      },
     });
   }
 
@@ -107,12 +95,12 @@ export default class ChatsService {
       fileName: string;
       fileSize: number;
     }
-  ) {
+  ): Promise<ChatMessage> {
     if (!ctx.user) {
       throw new Error("Not authenticated");
     }
 
-    await ChatsRepository.addMessage(ctx, {
+    return ChatsRepository.addMessage(ctx, {
       chatId,
       userId: ctx.user.id,
       role: ChatMessageRole.User,
@@ -123,7 +111,6 @@ export default class ChatsService {
       },
     });
   }
-
   static async saveMappedCsv(
     ctx: Context,
     {
@@ -145,12 +132,6 @@ export default class ChatsService {
       userId: ctx.user.id,
       candidates: mappedRows,
     });
-
-    await ChatsRepository.updateStatusForUser(ctx, {
-      id: chatId,
-      userId: ctx.user.id,
-      status: ChatStatus.WaitingForVacancy,
-    });
   }
 
   static async saveVacancy(
@@ -158,31 +139,20 @@ export default class ChatsService {
     {
       chatId,
       vacancyText,
-      fileName,
-      fileSize,
     }: {
       chatId: string;
       vacancyText: string;
-      fileName: string;
-      fileSize: number;
     }
-  ) {
+  ): Promise<ChatMessage> {
     if (!ctx.user) {
       throw new Error("Not authenticated");
     }
 
-    await ChatsRepository.addMessage(ctx, {
+    const message = await ChatsRepository.addMessage(ctx, {
       chatId,
       userId: ctx.user.id,
       role: ChatMessageRole.User,
-      content: fileName === "Gekopieerde tekst" ? vacancyText : null,
-      file:
-        fileName !== "Gekopieerde tekst"
-          ? {
-            name: fileName,
-            size: fileSize,
-          }
-          : undefined,
+      content: vacancyText,
     });
 
     await ChatsRepository.saveVacancy(ctx, {
@@ -190,10 +160,6 @@ export default class ChatsService {
       vacancyText,
     });
 
-    await ChatsRepository.updateStatusForUser(ctx, {
-      id: chatId,
-      userId: ctx.user.id,
-      status: ChatStatus.WaitingForComment,
-    });
+    return message;
   }
 }

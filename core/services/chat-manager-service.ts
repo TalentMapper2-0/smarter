@@ -1,4 +1,4 @@
-import { messages as chatMessages } from "@/lib/chat/messages";
+import { messages as chatMessages, type MessageKey } from "@/lib/chat/messages";
 import { Context } from "@/trpc/server/init";
 import { ChatMessageRole, ChatStatus } from "@/types/chat";
 import ChatsRepository from "../repositories/chats-repository";
@@ -6,6 +6,11 @@ import ChatsRepository from "../repositories/chats-repository";
 export type ChatManagerStreamMessage = {
   role: ChatMessageRole.Assistant;
   content: string;
+};
+
+type StreamRequest = {
+  messageKey?: MessageKey;
+  nextStatus?: ChatStatus;
 };
 
 export type ChatManagerStreamPlan =
@@ -24,7 +29,7 @@ export type ChatManagerStreamPlan =
 export default class ChatManagerService {
   static async getNextStreamPlan(
     ctx: Context,
-    { chatId }: { chatId: string }
+    { chatId, messageKey, nextStatus }: { chatId: string } & StreamRequest
   ): Promise<ChatManagerStreamPlan> {
     if (!ctx.user) {
       throw new Error("Not authenticated");
@@ -39,9 +44,32 @@ export default class ChatManagerService {
       return { type: "not-found" };
     }
 
+    if (messageKey) {
+      const content = chatMessages[messageKey];
+
+      if (!content) {
+        return { type: "empty" };
+      }
+
+      return {
+        type: "message",
+        message: {
+          role: ChatMessageRole.Assistant,
+          content,
+        },
+        nextStatus,
+      };
+    }
+
     switch (chat.status) {
       case ChatStatus.Initialized:
-        if ((chat.messages?.length ?? 0) > 0) {
+        if (
+          chat.messages?.some(
+            (message) =>
+              message.role === ChatMessageRole.Assistant &&
+              message.content === chatMessages.chatInitialized
+          )
+        ) {
           return { type: "empty" };
         }
 
@@ -84,7 +112,7 @@ export default class ChatManagerService {
       throw new Error("Not authenticated");
     }
 
-    return ChatsRepository.createMessageIfEmptyAndUpdateStatus(ctx, {
+    return ChatsRepository.createMessageAndUpdateStatus(ctx, {
       chatId,
       userId: ctx.user.id,
       content,

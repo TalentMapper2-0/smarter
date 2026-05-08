@@ -73,7 +73,7 @@ export const chatsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        await ChatsService.reuploadCsv(ctx, input);
+        return await ChatsService.reuploadCsv(ctx, input);
       } catch (error) {
         console.error("chat.reuploadCsv failed", error);
 
@@ -88,14 +88,14 @@ export const chatsRouter = router({
   uploadCsvMetadata: protectedProcedure
     .input(
       z.object({
-        chatId: z.string().uuid(),
+        chatId: z.uuid(),
         fileName: z.string(),
         fileSize: z.number(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        await ChatsService.uploadCsvMetadata(ctx, input);
+        return await ChatsService.uploadCsvMetadata(ctx, input);
       } catch (error) {
         console.error("chat.uploadCsvMetadata failed", error);
 
@@ -139,13 +139,11 @@ export const chatsRouter = router({
       z.object({
         chatId: z.string().uuid(),
         vacancyText: z.string(),
-        fileName: z.string(),
-        fileSize: z.number(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        await ChatsService.saveVacancy(ctx, input);
+        return await ChatsService.saveVacancy(ctx, input);
       } catch (error) {
         console.error("chat.saveVacancy failed", error);
 

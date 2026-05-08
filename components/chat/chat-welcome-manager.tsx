@@ -35,6 +35,7 @@ const CREATE_CHAT_ERROR_MESSAGE =
 
 export default function ChatWelcomeManager({ error }: { error?: string }) {
   const router = useRouter();
+  const utils = trpc.useUtils();
   const [isServerErrorDismissed, setIsServerErrorDismissed] = useState(false);
   const form = useForm<
     z.input<typeof formSchema>,
@@ -63,6 +64,8 @@ export default function ChatWelcomeManager({ error }: { error?: string }) {
       const chat = await createChat.mutateAsync({ title: values.title });
 
       form.reset();
+      await utils.chat.listRecent.invalidate();
+      router.refresh();
       router.push(`/c/${chat.id}`);
     } catch {
       setIsServerErrorDismissed(false);
@@ -71,7 +74,7 @@ export default function ChatWelcomeManager({ error }: { error?: string }) {
   });
 
   return (
-    <form className="w-full flex flex-col gap-6" onSubmit={handleSubmit}>
+    <form className="flex w-full flex-col gap-6" onSubmit={handleSubmit}>
       <div className="text-center">
         <h1 className="text-xl">Welkom bij Smarter!</h1>
         <p className="text-muted-foreground">

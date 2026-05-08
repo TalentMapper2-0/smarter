@@ -4,10 +4,14 @@ export type Chat = {
   userId: string;
   status: ChatStatus;
   messages?: ChatMessage[];
-}
+};
 
 export enum ChatStatus {
-  Initialized = "initialized", 
+  Initialized = "initialized",
+  WaitingForCsvInput = "waiting_for_csv_input",
+  MappingCsvColumns = "mapping_csv_columns",
+  NeedsCsvColumnMapping = "needs_csv_column_mapping",
+  CsvColumnsMapped = "csv_columns_mapped",
 }
 
 export enum ChatMessageRole {
@@ -20,4 +24,13 @@ export type ChatMessage = {
   chatId: string;
   role: ChatMessageRole;
   content: string;
-}
+};
+
+export type RequestMode = "vacancy" | "csv" | "comment" | "ready";
+
+export type VacancyRequestState = {
+  title: string;
+  vacancy: string;
+  csvFile: File | null;
+  comment: string;
+};

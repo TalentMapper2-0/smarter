@@ -14,11 +14,11 @@ import { usePathname } from "next/navigation";
 
 export function NavProjects() {
   const pathname = usePathname();
-  const { data: workspaces, isLoading } = trpc.workspaces.listRecent.useQuery();
+  const { data: chats, isLoading } = trpc.chat.listRecent.useQuery();
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Recente projecten</SidebarGroupLabel>
+      <SidebarGroupLabel>Recente chats</SidebarGroupLabel>
       <SidebarMenu>
         {isLoading && (
           <SidebarMenuItem>
@@ -29,24 +29,24 @@ export function NavProjects() {
           </SidebarMenuItem>
         )}
 
-        {workspaces?.map((workspace) => {
-          const href = `/p/${workspace.id}`;
+        {chats?.map((chat) => {
+          const href = `/p/${chat.id}`;
 
           return (
-            <SidebarMenuItem key={workspace.id}>
+            <SidebarMenuItem key={chat.id}>
               <SidebarMenuButton
                 asChild
                 isActive={pathname === href || pathname.startsWith(`${href}/`)}
               >
                 <Link href={href}>
-                  <span>{workspace.title}</span>
+                  <span>{chat.title}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           );
         })}
 
-        {!isLoading && workspaces?.length === 0 && (
+        {!isLoading && chats?.length === 0 && (
           <SidebarMenuItem>
             <SidebarMenuButton disabled>
               <span className="text-xs text-muted-foreground">

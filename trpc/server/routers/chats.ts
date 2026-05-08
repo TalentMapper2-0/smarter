@@ -3,6 +3,7 @@ import { protectedProcedure, router } from "../init";
 import z from "zod";
 import { TRPCError } from "@trpc/server";
 import ChatsService from "@/core/services/chats-service";
+import { ChatStatus } from "@/types/chat";
 
 export const chatsRouter = router({
   create: protectedProcedure
@@ -25,4 +26,41 @@ export const chatsRouter = router({
         });
       }
     }),
+  updateStatus: protectedProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        status: z.nativeEnum(ChatStatus),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ChatsService.updateStatus(ctx, input);
+      } catch (error) {
+        console.error("chat.updateStatus failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to update chat status",
+          cause: error,
+        });
+      }
+    }),
+  listRecent: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      return await ChatsService.listRecent(ctx);
+    } catch (error) {
+      console.error("chats.listRecent failed", error);
+
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message:
+          error instanceof Error ? error.message : "Failed to list chats",
+        cause: error,
+      });
+    }
+  }),
 });

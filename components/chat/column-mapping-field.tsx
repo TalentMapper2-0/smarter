@@ -1,5 +1,3 @@
-import { useId } from "react";
-
 import {
   Select,
   SelectContent,
@@ -10,8 +8,8 @@ import {
 } from "@/components/ui/select";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
-
-import { FIELD_LABELS, type RequiredField } from "./constants";
+import { useId } from "react";
+import { FIELD_LABELS, RequiredField } from "./constants";
 
 export function ColumnMappingField({
   columns,

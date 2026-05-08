@@ -5,7 +5,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { WorkspaceTitle } from "@/components/workspace-title";
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 
@@ -63,7 +62,7 @@ export default async function Layout({
               orientation="vertical"
               className="mr-2 data-vertical:h-4 data-vertical:self-auto"
             />
-            <WorkspaceTitle />
+            Smarter
           </div>
         </header>
         <Separator />

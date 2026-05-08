@@ -2,9 +2,9 @@ import { Context } from "@/trpc/server/init";
 import CandidatesRepository, {
   type CandidateClassificationResult,
 } from "../repositories/candidates-repository";
-import WorkspacesRepository from "../repositories/workspaces-repository";
-import { WorkspaceFlowStage } from "@/types/workspace";
+import ChatsRepository from "../repositories/chats-repository";
 import { parsedEnv } from "@/config/env";
+import { ChatStatus } from "@/types/chat";
 
 type UploadedCandidateRow = {
   linkedinUrl: string;
@@ -14,14 +14,14 @@ type UploadedCandidateRow = {
 };
 
 type CreateCandidatesInput = {
-  workspaceId: string;
+  chatId: string;
   vacancyText: string;
   commentText?: string;
   rows: UploadedCandidateRow[];
 };
 
 type ClassifyCandidatesInput = {
-  workspaceId: string;
+  chatId: string;
 };
 
 type OrchestratorClassifyRequest = {
@@ -44,43 +44,43 @@ type JsonValue =
 export default class CandidatesService {
   static async findUpload(
     ctx: Context,
-    { workspaceId }: { workspaceId: string }
+    { chatId }: { chatId: string }
   ) {
     if (!ctx.user) {
       throw new Error("Not authenticated");
     }
 
-    const workspace = await WorkspacesRepository.findByIdForUser(ctx, {
-      id: workspaceId,
+    const chat = await ChatsRepository.findByIdForUser(ctx, {
+      id: chatId,
       userId: ctx.user.id,
     });
 
-    if (!workspace) {
+    if (!chat) {
       throw new Error("Workspace not found");
     }
 
-    return CandidatesRepository.findUploadByWorkspaceId(ctx, { workspaceId });
+    return CandidatesRepository.findUploadByChatId(ctx, { chatId });
   }
 
   static async listClassificationRows(
     ctx: Context,
-    { workspaceId }: { workspaceId: string }
+    { chatId }: { chatId: string }
   ) {
     if (!ctx.user) {
       throw new Error("Not authenticated");
     }
 
-    const workspace = await WorkspacesRepository.findByIdForUser(ctx, {
-      id: workspaceId,
+    const chat = await ChatsRepository.findByIdForUser(ctx, {
+      id: chatId,
       userId: ctx.user.id,
     });
 
-    if (!workspace) {
+    if (!chat) {
       throw new Error("Workspace not found");
     }
 
-    return CandidatesRepository.listClassificationRowsByWorkspaceId(ctx, {
-      workspaceId,
+    return CandidatesRepository.listClassificationRowsByChatId(ctx, {
+      chatId,
     });
   }
 
@@ -92,18 +92,19 @@ export default class CandidatesService {
       throw new Error("Not authenticated");
     }
 
-    const workspace = await WorkspacesRepository.findByIdForUser(ctx, {
-      id: input.workspaceId,
+    const chat = await ChatsRepository.findByIdForUser(ctx, {
+      id: input.chatId,
       userId: ctx.user.id,
     });
 
-    if (!workspace) {
+    if (!chat) {
       throw new Error("Workspace not found");
     }
 
     if (
-      workspace.flowState.flowStage !== WorkspaceFlowStage.NeedsCsv &&
-      workspace.flowState.flowStage !== WorkspaceFlowStage.ReadyToClassify
+      chat.status !== ChatStatus.NeedsCsvColumnMapping &&
+      chat.status !== ChatStatus.ReadyToClassify &&
+      chat.status !== ChatStatus.CsvColumnsMapped
     ) {
       throw new Error(
         "This upload can no longer be changed because the next step has already processed the data."
@@ -111,41 +112,39 @@ export default class CandidatesService {
     }
 
     await CandidatesRepository.create(ctx, input);
-    await WorkspacesRepository.updateFlowStateForUser(ctx, {
-      id: input.workspaceId,
+    await ChatsRepository.updateStatusForUser(ctx, {
+      id: input.chatId,
       userId: ctx.user.id,
-      flowState: {
-        flowStage: WorkspaceFlowStage.ReadyToClassify,
-      },
+      status: ChatStatus.ReadyToClassify,
     });
   }
 
   static async startClassification(
     ctx: Context,
     input: ClassifyCandidatesInput
-  ): Promise<{ flowStage: WorkspaceFlowStage }> {
+  ): Promise<{ flowStage: ChatStatus }> {
     if (!ctx.user) {
       throw new Error("Not authenticated");
     }
 
-    const workspace = await WorkspacesRepository.findByIdForUser(ctx, {
-      id: input.workspaceId,
+    const chat = await ChatsRepository.findByIdForUser(ctx, {
+      id: input.chatId,
       userId: ctx.user.id,
     });
 
-    if (!workspace) {
+    if (!chat) {
       throw new Error("Workspace not found");
     }
 
     if (
-      workspace.flowState.flowStage !== WorkspaceFlowStage.ReadyToClassify &&
-      workspace.flowState.flowStage !== WorkspaceFlowStage.ClassificationFailed
+      chat.status !== ChatStatus.ReadyToClassify &&
+      chat.status !== ChatStatus.ClassificationFailed
     ) {
-      throw new Error("This workspace is not ready to classify.");
+      throw new Error("This chat is not ready to classify.");
     }
 
-    const upload = await CandidatesRepository.findUploadByWorkspaceId(ctx, {
-      workspaceId: input.workspaceId,
+    const upload = await CandidatesRepository.findUploadByChatId(ctx, {
+      chatId: input.chatId,
     });
 
     if (!upload) {
@@ -161,43 +160,41 @@ export default class CandidatesService {
     }
 
     await CandidatesRepository.markClassificationStarted(ctx, {
-      workspaceId: input.workspaceId,
+      chatId: input.chatId,
     });
 
-    await WorkspacesRepository.updateFlowStateForUser(ctx, {
-      id: input.workspaceId,
+    await ChatsRepository.updateStatusForUser(ctx, {
+      id: input.chatId,
       userId: ctx.user.id,
-      flowState: {
-        flowStage: WorkspaceFlowStage.Classifying,
-      },
+      status: ChatStatus.ClassifyingCandidates,
     });
 
-    return { flowStage: WorkspaceFlowStage.Classifying };
+    return { flowStage: ChatStatus.ClassifyingCandidates };
   }
 
   static async runClassification(
     ctx: Context,
     input: ClassifyCandidatesInput
-  ): Promise<{ flowStage: WorkspaceFlowStage }> {
+  ): Promise<{ flowStage: ChatStatus }> {
     if (!ctx.user) {
       throw new Error("Not authenticated");
     }
 
-    const workspace = await WorkspacesRepository.findByIdForUser(ctx, {
-      id: input.workspaceId,
+    const chat = await ChatsRepository.findByIdForUser(ctx, {
+      id: input.chatId,
       userId: ctx.user.id,
     });
 
-    if (!workspace) {
+    if (!chat) {
       throw new Error("Workspace not found");
     }
 
-    if (workspace.flowState.flowStage !== WorkspaceFlowStage.Classifying) {
-      throw new Error("This workspace is not currently classifying.");
+    if (chat.status !== ChatStatus.ClassifyingCandidates) {
+      throw new Error("This chat is not currently classifying.");
     }
 
-    const upload = await CandidatesRepository.findUploadByWorkspaceId(ctx, {
-      workspaceId: input.workspaceId,
+    const upload = await CandidatesRepository.findUploadByChatId(ctx, {
+      chatId: input.chatId,
     });
 
     if (!upload) {
@@ -249,7 +246,7 @@ export default class CandidatesService {
           profilesList,
           async (result) => {
             await CandidatesRepository.saveClassificationResults(ctx, {
-              workspaceId: input.workspaceId,
+              chatId: input.chatId,
               results: [result],
             });
           }
@@ -259,26 +256,22 @@ export default class CandidatesService {
         throw new Error("No candidate classification results returned.");
       }
 
-      await WorkspacesRepository.updateFlowStateForUser(ctx, {
-        id: input.workspaceId,
+      await ChatsRepository.updateStatusForUser(ctx, {
+        id: input.chatId,
         userId: ctx.user.id,
-        flowState: {
-          flowStage: WorkspaceFlowStage.Complete,
-        },
+        status: ChatStatus.ClassificationComplete,
       });
 
-      return { flowStage: WorkspaceFlowStage.Complete };
+      return { flowStage: ChatStatus.ClassificationComplete };
     } catch (error) {
       await CandidatesRepository.markPendingClassificationFailed(ctx, {
-        workspaceId: input.workspaceId,
+        chatId: input.chatId,
       });
 
-      await WorkspacesRepository.updateFlowStateForUser(ctx, {
-        id: input.workspaceId,
+      await ChatsRepository.updateStatusForUser(ctx, {
+        id: input.chatId,
         userId: ctx.user.id,
-        flowState: {
-          flowStage: WorkspaceFlowStage.ClassificationFailed,
-        },
+        status: ChatStatus.ClassificationFailed,
       });
 
       throw error;

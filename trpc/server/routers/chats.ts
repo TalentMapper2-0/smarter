@@ -63,4 +63,75 @@ export const chatsRouter = router({
       });
     }
   }),
+  reuploadCsv: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        fileName: z.string(),
+        fileSize: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ChatsService.reuploadCsv(ctx, input);
+      } catch (error) {
+        console.error("chat.reuploadCsv failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error ? error.message : "Failed to reupload csv",
+          cause: error,
+        });
+      }
+    }),
+  uploadCsvMetadata: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        fileName: z.string(),
+        fileSize: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ChatsService.uploadCsvMetadata(ctx, input);
+      } catch (error) {
+        console.error("chat.uploadCsvMetadata failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to upload csv metadata",
+          cause: error,
+        });
+      }
+    }),
+  saveMappedCsv: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        fileName: z.string(),
+        fileSize: z.number(),
+        mappedRows: z.array(z.any()),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ChatsService.saveMappedCsv(ctx, input);
+      } catch (error) {
+        console.error("chat.saveMappedCsv failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to save mapped csv",
+          cause: error,
+        });
+      }
+    }),
 });

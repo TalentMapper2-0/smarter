@@ -1,9 +1,17 @@
+export type MessageFile = {
+  id: string;
+  messageId: string;
+  name: string;
+  size: number;
+};
+
 export type Chat = {
   id: string;
   title: string;
   userId: string;
   status: ChatStatus;
   messages?: ChatMessage[];
+  createdAt: string;
 };
 
 export enum ChatStatus {
@@ -12,6 +20,10 @@ export enum ChatStatus {
   MappingCsvColumns = "mapping_csv_columns",
   NeedsCsvColumnMapping = "needs_csv_column_mapping",
   CsvColumnsMapped = "csv_columns_mapped",
+  ReadyToClassify = "ready_to_classify",
+  ClassifyingCandidates = "classifying_candidates",
+  ClassificationComplete = "classification_complete",
+  ClassificationFailed = "classification_failed",
 }
 
 export enum ChatMessageRole {
@@ -24,6 +36,7 @@ export type ChatMessage = {
   chatId: string;
   role: ChatMessageRole;
   content: string;
+  files?: MessageFile[];
 };
 
 export type RequestMode = "vacancy" | "csv" | "comment" | "ready";

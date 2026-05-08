@@ -13,6 +13,9 @@ export const messages = {
 
   csvUploadNew:
     "Ik kon dit CSV-bestand niet gebruiken. Upload een nieuw CSV-bestand.",
+
+  csvReuploadOk:
+    "Oké, probeer het bestand opnieuw te uploaden.",
 } as const;
 
 export type MessageKey = keyof typeof messages;

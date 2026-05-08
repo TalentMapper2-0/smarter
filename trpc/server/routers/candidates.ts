@@ -10,7 +10,7 @@ export const candidatesRouter = router({
   getUpload: protectedProcedure
     .input(
       z.object({
-        workspaceId: z.uuid(),
+        chatId: z.uuid(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -33,7 +33,7 @@ export const candidatesRouter = router({
   listClassificationRows: protectedProcedure
     .input(
       z.object({
-        workspaceId: z.uuid(),
+        chatId: z.uuid(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -56,7 +56,7 @@ export const candidatesRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        workspaceId: z.uuid(),
+        chatId: z.uuid(),
         vacancyText: z.string().trim().min(1),
         commentText: z.string().trim().optional(),
         rows: z.array(
@@ -89,7 +89,7 @@ export const candidatesRouter = router({
   classify: protectedProcedure
     .input(
       z.object({
-        workspaceId: z.uuid(),
+        chatId: z.uuid(),
       })
     )
     .mutation(async ({ ctx, input }) => {

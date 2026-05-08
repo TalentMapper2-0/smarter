@@ -9,7 +9,7 @@ type UploadedCandidateRow = {
 };
 
 type CreateCandidatesInput = {
-  workspaceId: string;
+  chatId: string;
   vacancyText: string;
   commentText?: string;
   rows: UploadedCandidateRow[];
@@ -39,16 +39,16 @@ export type UploadedCandidateData = {
 };
 
 export default class CandidatesRepository {
-  static async findUploadByWorkspaceId(
+  static async findUploadByChatId(
     ctx: Context,
-    { workspaceId }: { workspaceId: string }
+    { chatId }: { chatId: string }
   ): Promise<UploadedCandidateData | null> {
     const { supabase } = ctx;
 
     const { data: vacancyRows, error: vacancyError } = await supabase
       .from("classify_vacancies")
       .select("vacancy_text")
-      .eq("workspace_id", workspaceId)
+      .eq("chat_id", chatId)
       .limit(1);
 
     if (vacancyError) {
@@ -58,7 +58,7 @@ export default class CandidatesRepository {
     const { data: commentRows, error: commentError } = await supabase
       .from("classify_comments")
       .select("comment_text")
-      .eq("workspace_id", workspaceId)
+      .eq("chat_id", chatId)
       .limit(1);
 
     if (commentError) {
@@ -68,7 +68,7 @@ export default class CandidatesRepository {
     const { data: candidateRows, error: candidateError } = await supabase
       .from("classify_candidates")
       .select("linkedin_url,sales_navigator_id,name")
-      .eq("workspace_id", workspaceId);
+      .eq("chat_id", chatId);
 
     if (candidateError) {
       throw candidateError;
@@ -96,20 +96,20 @@ export default class CandidatesRepository {
 
   static async create(
     ctx: Context,
-    { workspaceId, rows, vacancyText, commentText }: CreateCandidatesInput
+    { chatId, rows, vacancyText, commentText }: CreateCandidatesInput
   ): Promise<void> {
     const { supabase } = ctx;
     const candidateRows = rows.map((row) => ({
       linkedin_url: row.linkedinUrl,
       sales_navigator_id: row.salesNavigatorId,
       name: [row.firstName, row.lastName].filter(Boolean).join(" ").trim(),
-      workspace_id: workspaceId,
+      chat_id: chatId,
     }));
 
     const { error: deleteCommentsError } = await supabase
       .from("classify_comments")
       .delete()
-      .eq("workspace_id", workspaceId);
+      .eq("chat_id", chatId);
 
     if (deleteCommentsError) {
       throw deleteCommentsError;
@@ -118,7 +118,7 @@ export default class CandidatesRepository {
     const { error: deleteVacanciesError } = await supabase
       .from("classify_vacancies")
       .delete()
-      .eq("workspace_id", workspaceId);
+      .eq("chat_id", chatId);
 
     if (deleteVacanciesError) {
       throw deleteVacanciesError;
@@ -127,7 +127,7 @@ export default class CandidatesRepository {
     const { error: deleteCandidatesError } = await supabase
       .from("classify_candidates")
       .delete()
-      .eq("workspace_id", workspaceId);
+      .eq("chat_id", chatId);
 
     if (deleteCandidatesError) {
       throw deleteCandidatesError;
@@ -145,7 +145,7 @@ export default class CandidatesRepository {
       .from("classify_vacancies")
       .insert({
         vacancy_text: vacancyText,
-        workspace_id: workspaceId,
+        chat_id: chatId,
       });
 
     if (vacancyError) {
@@ -157,7 +157,7 @@ export default class CandidatesRepository {
         .from("classify_comments")
         .insert({
           comment_text: commentText,
-          workspace_id: workspaceId,
+          chat_id: chatId,
         });
 
       if (commentError) {
@@ -166,9 +166,9 @@ export default class CandidatesRepository {
     }
   }
 
-  static async listClassificationRowsByWorkspaceId(
+  static async listClassificationRowsByChatId(
     ctx: Context,
-    { workspaceId }: { workspaceId: string }
+    { chatId }: { chatId: string }
   ): Promise<CandidateClassificationRow[]> {
     const { supabase } = ctx;
 
@@ -177,7 +177,7 @@ export default class CandidatesRepository {
       .select(
         "id,linkedin_url,sales_navigator_id,name,label,explanation,status"
       )
-      .eq("workspace_id", workspaceId)
+      .eq("chat_id", chatId)
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -197,7 +197,7 @@ export default class CandidatesRepository {
 
   static async markClassificationStarted(
     ctx: Context,
-    { workspaceId }: { workspaceId: string }
+    { chatId }: { chatId: string }
   ): Promise<void> {
     const { supabase } = ctx;
 
@@ -208,7 +208,7 @@ export default class CandidatesRepository {
         label: null,
         status: "classifying",
       })
-      .eq("workspace_id", workspaceId);
+      .eq("chat_id", chatId);
 
     if (error) {
       throw error;
@@ -217,7 +217,7 @@ export default class CandidatesRepository {
 
   static async markPendingClassificationFailed(
     ctx: Context,
-    { workspaceId }: { workspaceId: string }
+    { chatId }: { chatId: string }
   ): Promise<void> {
     const { supabase } = ctx;
 
@@ -226,7 +226,7 @@ export default class CandidatesRepository {
       .update({
         status: "failed",
       })
-      .eq("workspace_id", workspaceId)
+      .eq("chat_id", chatId)
       .eq("status", "classifying");
 
     if (error) {
@@ -237,9 +237,9 @@ export default class CandidatesRepository {
   static async saveClassificationResults(
     ctx: Context,
     {
-      workspaceId,
+      chatId,
       results,
-    }: { workspaceId: string; results: CandidateClassificationResult[] }
+    }: { chatId: string; results: CandidateClassificationResult[] }
   ): Promise<void> {
     const { supabase } = ctx;
 
@@ -251,7 +251,7 @@ export default class CandidatesRepository {
           label: result.label,
           status: result.status,
         })
-        .eq("workspace_id", workspaceId)
+        .eq("chat_id", chatId)
         .eq("linkedin_url", result.linkedinUrl)
         .select("id");
 

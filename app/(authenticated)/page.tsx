@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -16,18 +18,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import WorkspacesService from "@/core/services/workspaces-service";
+import ChatsService from "@/core/services/chats-service";
 import { createServerContext } from "@/trpc/server/caller";
-import {
-  getWorkspaceNodeStatuses,
-  type Workspace,
-  WorkspaceFlowStage,
-} from "@/types/workspace";
-import { NodeStatus } from "@/types/note";
-import { Spinner } from "@/components/ui/spinner";
+import { Chat, ChatStatus } from "@/types/chat";
 
 function getFirstName(email: string) {
   const name = email
@@ -50,25 +44,41 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function getCompletedSteps(workspace: Workspace) {
-  const { uploadCsvStatus, candidateClassificationStatus } =
-    getWorkspaceNodeStatuses(workspace.flowState.flowStage);
-  const statuses = [uploadCsvStatus, candidateClassificationStatus];
+function getCompletedSteps(chat: Chat) {
+  const isUploadComplete =
+    chat.status === ChatStatus.CsvColumnsMapped ||
+    chat.status === ChatStatus.ReadyToClassify ||
+    chat.status === ChatStatus.ClassifyingCandidates ||
+    chat.status === ChatStatus.ClassificationComplete ||
+    chat.status === ChatStatus.ClassificationFailed;
 
-  return statuses.filter((status) => status === NodeStatus.Success).length;
+  const isClassificationComplete =
+    chat.status === ChatStatus.ClassificationComplete;
+
+  let completed = 0;
+  if (isUploadComplete) completed += 1;
+  if (isClassificationComplete) completed += 1;
+
+  return completed;
 }
 
-function getWorkspaceStatus(workspace: Workspace) {
-  switch (workspace.flowState.flowStage) {
-    case WorkspaceFlowStage.Complete:
+function getChatStatus(chat: Chat) {
+  switch (chat.status) {
+    case ChatStatus.ClassificationComplete:
       return "Klaar";
-    case WorkspaceFlowStage.Classifying:
-      return "Bezig";
-    case WorkspaceFlowStage.ClassificationFailed:
-      return "Aandacht nodig";
-    case WorkspaceFlowStage.ReadyToClassify:
+    case ChatStatus.ClassifyingCandidates:
+      return "Bezig met classificatie";
+    case ChatStatus.ClassificationFailed:
+      return "Aandacht nodig (Classificatie gefaald)";
+    case ChatStatus.ReadyToClassify:
       return "Wachten op classificatie";
-    case WorkspaceFlowStage.NeedsCsv:
+    case ChatStatus.NeedsCsvColumnMapping:
+      return "Kolommen koppelen";
+    case ChatStatus.MappingCsvColumns:
+      return "Bezig met inlezen";
+    case ChatStatus.WaitingForCsvInput:
+      return "Wachten op CSV";
+    case ChatStatus.Initialized:
     default:
       return "In voorbereiding";
   }
@@ -76,17 +86,18 @@ function getWorkspaceStatus(workspace: Workspace) {
 
 export default async function Page() {
   const ctx = await createServerContext();
-  const workspaces = ctx.user ? await WorkspacesService.listRecent(ctx) : [];
-  const latestWorkspace = workspaces[0];
-  const completedWorkspaces = workspaces.filter(
-    (workspace) => getWorkspaceStatus(workspace) === "Klaar"
+  const chats = ctx.user ? await ChatsService.listRecent(ctx) : [];
+  const latestChat = chats[0];
+  const completedChats = chats.filter(
+    (chat) => getChatStatus(chat) === "Klaar"
   ).length;
-  const waitingWorkspaces = workspaces.filter((workspace) =>
+  const waitingChats = chats.filter((chat) =>
     [
-      WorkspaceFlowStage.NeedsCsv,
-      WorkspaceFlowStage.ReadyToClassify,
-      WorkspaceFlowStage.ClassificationFailed,
-    ].includes(workspace.flowState.flowStage)
+      ChatStatus.WaitingForCsvInput,
+      ChatStatus.NeedsCsvColumnMapping,
+      ChatStatus.ReadyToClassify,
+      ChatStatus.ClassificationFailed,
+    ].includes(chat.status)
   ).length;
 
   return (
@@ -109,10 +120,10 @@ export default async function Page() {
           </div>
 
           <div className="mt-8 flex flex-wrap gap-2">
-            {latestWorkspace ? (
+            {latestChat ? (
               <Button asChild variant="secondary">
-                <Link href={`/p/${latestWorkspace.id}`}>
-                  Open laatste project
+                <Link href={`/c/${latestChat.id}`}>
+                  Open laatste chat
                   <ArrowRightIcon data-icon="inline-end" />
                 </Link>
               </Button>
@@ -122,19 +133,19 @@ export default async function Page() {
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
           <Card>
             <CardHeader>
-              <CardTitle>{workspaces.length}</CardTitle>
-              <CardDescription>Recente projecten</CardDescription>
+              <CardTitle>{chats.length}</CardTitle>
+              <CardDescription>Recente chats</CardDescription>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>{completedWorkspaces}</CardTitle>
+              <CardTitle>{completedChats}</CardTitle>
               <CardDescription>Flows afgerond</CardDescription>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>{waitingWorkspaces}</CardTitle>
+              <CardTitle>{waitingChats}</CardTitle>
               <CardDescription>Wachten op input</CardDescription>
             </CardHeader>
           </Card>
@@ -144,18 +155,18 @@ export default async function Page() {
       <section className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
         <Card id="projecten">
           <CardHeader>
-            <CardTitle>Recente projecten</CardTitle>
+            <CardTitle>Recente chats</CardTitle>
             <CardDescription>
-              Je laatste werkruimtes, met de huidige status van de flow.
+              Je laatste chats, met de huidige status van de flow.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {workspaces.length > 0 ? (
+            {chats.length > 0 ? (
               <div className="flex flex-col gap-3">
-                {workspaces.map((workspace) => (
+                {chats.map((chat) => (
                   <Link
-                    key={workspace.id}
-                    href={`/p/${workspace.id}`}
+                    key={chat.id}
+                    href={`/c/${chat.id}`}
                     className="group flex flex-col gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex min-w-0 items-start gap-3">
@@ -164,20 +175,20 @@ export default async function Page() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate font-medium">
-                          {workspace.title}
+                          {chat.title}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Aangemaakt op {formatDate(workspace.createdAt)}
+                          Aangemaakt op {formatDate(chat.createdAt)}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3 sm:justify-end">
                       <Badge variant="outline">
-                        {getWorkspaceStatus(workspace)}
+                        {getChatStatus(chat)}
                       </Badge>
                       <span className="text-sm text-muted-foreground">
-                        {getCompletedSteps(workspace)}/2 stappen
+                        {getCompletedSteps(chat)}/2 stappen
                       </span>
                       <ArrowRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                     </div>
@@ -190,9 +201,9 @@ export default async function Page() {
                   <FileSpreadsheetIcon className="size-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="font-medium">Nog geen projecten</p>
+                  <p className="font-medium">Nog geen chats</p>
                   <p className="text-sm text-muted-foreground">
-                    Maak je eerste project aan via de zijbalk.
+                    Start je eerste chat via de zijbalk.
                   </p>
                 </div>
               </div>

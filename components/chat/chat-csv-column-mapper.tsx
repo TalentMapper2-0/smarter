@@ -1,6 +1,7 @@
 "use client";
 
 import { FieldError, FieldGroup } from "@/components/ui/field";
+import { Button } from "@/components/ui/button";
 import { ColumnMappingField } from "@/components/chat/column-mapping-field";
 import { ColumnMapping, REQUIRED_FIELDS } from "./constants";
 
@@ -9,6 +10,7 @@ type ChatCsvColumnMapperProps = {
   disabled?: boolean;
   mapping: ColumnMapping;
   onChangeAction: (nextMapping: ColumnMapping) => void;
+  onReuploadAction: () => void;
 };
 
 export function ChatCsvColumnMapper({
@@ -16,6 +18,7 @@ export function ChatCsvColumnMapper({
   disabled = false,
   mapping,
   onChangeAction: onChange,
+  onReuploadAction,
 }: ChatCsvColumnMapperProps) {
   const hasMissingFields = REQUIRED_FIELDS.some((field) => !mapping[field]);
 
@@ -44,6 +47,15 @@ export function ChatCsvColumnMapper({
           Koppel alle verplichte kolommen om door te gaan.
         </FieldError>
       ) : null}
+      <div className="mt-4 flex justify-end">
+        <Button
+          variant="outline"
+          disabled={disabled}
+          onClick={onReuploadAction}
+        >
+          Opnieuw uploaden
+        </Button>
+      </div>
     </div>
   );
 }

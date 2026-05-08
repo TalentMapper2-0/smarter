@@ -1,8 +1,9 @@
 import { Context } from "@/trpc/server/init";
+import { CandidateCreate } from "@/types/candidate";
 import { Chat, ChatMessage, ChatMessageRole, ChatStatus } from "@/types/chat";
 
 const chatSelect =
-  "id, title, userId:user_id, status, messages (id, role, chatId:chat_id, content)";
+  "id, title, userId:user_id, status, createdAt:created_at, messages (id, role, chatId:chat_id, content, files:message_files (id, messageId:message_id, name, size))";
 
 export default class ChatsRepository {
   static async create(ctx: Context, title: string): Promise<Chat> {
@@ -118,6 +119,103 @@ export default class ChatsRepository {
     }
 
     return message;
+  }
+
+  static async addMessage(
+    ctx: Context,
+    {
+      chatId,
+      userId,
+      content,
+      role,
+      file,
+    }: {
+      chatId: string;
+      userId: string;
+      content: string;
+      role: ChatMessageRole;
+      file?: {
+        name: string;
+        size: number;
+      };
+    }
+  ): Promise<ChatMessage> {
+    const { supabase } = ctx;
+
+    const { data: chat, error: chatError } = await supabase
+      .from("chats")
+      .select("id")
+      .eq("id", chatId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (chatError) {
+      throw chatError;
+    }
+
+    if (!chat) {
+      throw new Error("Chat not found");
+    }
+
+    const { data: message, error: messageError } = await supabase
+      .from("messages")
+      .insert({
+        chat_id: chatId,
+        role,
+        content,
+      })
+      .select("id, role, chatId:chat_id, content")
+      .single();
+
+    if (messageError) {
+      throw messageError;
+    }
+
+    if (file) {
+      const { error: fileError } = await supabase.from("message_files").insert({
+        message_id: message.id,
+        name: file.name,
+        size: file.size,
+      });
+
+      if (fileError) {
+        throw fileError;
+      }
+      
+      return {
+        ...message,
+        files: [{ id: "temp", messageId: message.id, name: file.name, size: file.size }],
+      };
+    }
+
+    return message;
+  }
+
+  static async saveChatCandidates(
+    ctx: Context,
+    {
+      chatId,
+      candidates,
+    }: {
+      chatId: string;
+      userId: string;
+      candidates: CandidateCreate[];
+    }
+  ) {
+    const { supabase } = ctx;
+
+    const rows = candidates.map((row) => ({
+      workspace_id: chatId,
+      linkedin_url: row.linkedinUrl,
+      sales_navigator_id: row.salesNavigatorId ?? null,
+      name: [row.firstName, row.lastName].filter(Boolean).join(" ").trim(),
+    }));
+
+    const { error } = await supabase.from("classify_candidates").insert(rows);
+
+    if (error) {
+      throw error;
+    }
   }
 
   static async findByIdForUser(

@@ -29,6 +29,9 @@ type Props = {
 export default function AgentConversation({ chat }: Props) {
   const router = useRouter();
   const updateChatStatus = trpc.chat.updateStatus.useMutation();
+  const reuploadCsv = trpc.chat.reuploadCsv.useMutation();
+  const saveMappedCsv = trpc.chat.saveMappedCsv.useMutation();
+  const uploadCsvMetadata = trpc.chat.uploadCsvMetadata.useMutation();
   const [streamedInitialMessage, setStreamedInitialMessage] = useState({
     chatId: chat.id,
     content: "",
@@ -49,6 +52,10 @@ export default function AgentConversation({ chat }: Props) {
     chatId: string;
     mapping: ColumnMapping;
   } | null>(null);
+  const [csvRowsState, setCsvRowsState] = useState<{
+    chatId: string;
+    rows: any[];
+  } | null>(null);
   const shouldStreamInitialMessage = (chat.messages?.length ?? 0) === 0;
   const initialMessageContent =
     streamedInitialMessage.chatId === chat.id
@@ -59,7 +66,9 @@ export default function AgentConversation({ chat }: Props) {
       ? optimisticStatus.status
       : chat.status;
   const selectedCsvFile =
-    selectedCsvFileState?.chatId === chat.id ? selectedCsvFileState.file : null;
+    selectedCsvFileState?.chatId === chat.id
+      ? selectedCsvFileState.file
+      : null;
   const csvColumns =
     csvColumnsState?.chatId === chat.id ? csvColumnsState.columns : [];
   const columnMapping =
@@ -197,6 +206,7 @@ export default function AgentConversation({ chat }: Props) {
     });
     setCsvColumnsState(null);
     setColumnMappingState(null);
+    setCsvRowsState(null);
 
     try {
       await updateChatStatus.mutateAsync({
@@ -230,9 +240,19 @@ export default function AgentConversation({ chat }: Props) {
         ? ChatStatus.CsvColumnsMapped
         : ChatStatus.NeedsCsvColumnMapping;
 
+      await uploadCsvMetadata.mutateAsync({
+        chatId: chat.id,
+        fileName: file.name,
+        fileSize: file.size,
+      });
+
       setCsvColumnsState({
         chatId: chat.id,
         columns: parsedCsv.columns,
+      });
+      setCsvRowsState({
+        chatId: chat.id,
+        rows: parsedCsv.rows,
       });
       setColumnMappingState({
         chatId: chat.id,
@@ -251,6 +271,7 @@ export default function AgentConversation({ chat }: Props) {
       setSelectedCsvFileState(null);
       setCsvColumnsState(null);
       setColumnMappingState(null);
+      setCsvRowsState(null);
       setOptimisticStatus(null);
       throw error;
     }
@@ -278,11 +299,57 @@ export default function AgentConversation({ chat }: Props) {
     });
 
     try {
-      await updateChatStatus.mutateAsync({
-        id: chat.id,
-        status: nextStatus,
+      const rowsToSave = (csvRowsState?.chatId === chat.id ? csvRowsState.rows : []).map((row) => {
+        const mappedRow: Record<string, any> = {};
+        for (const field of REQUIRED_FIELDS) {
+          mappedRow[field] = row[nextMapping[field]];
+        }
+        return mappedRow;
       });
+
+      await saveMappedCsv.mutateAsync({
+        chatId: chat.id,
+        fileName: selectedCsvFile?.name ?? "onbekend.csv",
+        fileSize: selectedCsvFile?.size ?? 0,
+        mappedRows: rowsToSave,
+      });
+
+      setSelectedCsvFileState(null);
+      setCsvColumnsState(null);
+      setColumnMappingState(null);
+      setCsvRowsState(null);
+      
+      router.refresh();
     } catch {
+      setOptimisticStatus({
+        chatId: chat.id,
+        status: ChatStatus.NeedsCsvColumnMapping,
+      });
+    }
+  };
+
+  const handleReuploadCsv = async () => {
+    if (!selectedCsvFile) return;
+
+    setOptimisticStatus({
+      chatId: chat.id,
+      status: ChatStatus.WaitingForCsvInput,
+    });
+
+    try {
+      await reuploadCsv.mutateAsync({
+        chatId: chat.id,
+        fileName: selectedCsvFile.name,
+        fileSize: selectedCsvFile.size,
+      });
+
+      setSelectedCsvFileState(null);
+      setCsvColumnsState(null);
+      setColumnMappingState(null);
+      setCsvRowsState(null);
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to reupload csv", error);
       setOptimisticStatus({
         chatId: chat.id,
         status: ChatStatus.NeedsCsvColumnMapping,
@@ -309,13 +376,17 @@ export default function AgentConversation({ chat }: Props) {
                 ) : (
                   <MessageResponse>{message.content}</MessageResponse>
                 )}
+
+                {message.files?.map((file) => (
+                  <ChatCsvDropzone key={file.id} selectedFile={file} />
+                ))}
+
                 {isWaitingForCsvInput &&
                 index === messages.length - 1 &&
                 message.role === ChatMessageRole.Assistant ? (
                   <ChatCsvDropzone
                     isUploading={updateChatStatus.isPending}
                     onCsvSelectedAction={handleCsvSelected}
-                    selectedFile={selectedCsvFile}
                   />
                 ) : null}
               </MessageContent>
@@ -349,10 +420,13 @@ export default function AgentConversation({ chat }: Props) {
                 </MessageResponse>
                 <ChatCsvColumnMapper
                   columns={csvColumns}
-                  disabled={updateChatStatus.isPending}
+                  disabled={updateChatStatus.isPending || reuploadCsv.isPending}
                   mapping={columnMapping}
                   onChangeAction={(nextMapping) => {
                     void handleColumnMappingChange(nextMapping);
+                  }}
+                  onReuploadAction={() => {
+                    void handleReuploadCsv();
                   }}
                 />
               </MessageContent>

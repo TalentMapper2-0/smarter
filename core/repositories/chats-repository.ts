@@ -132,7 +132,7 @@ export default class ChatsRepository {
     }: {
       chatId: string;
       userId: string;
-      content: string;
+      content: string | null;
       role: ChatMessageRole;
       file?: {
         name: string;

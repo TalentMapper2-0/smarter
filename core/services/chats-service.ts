@@ -116,7 +116,7 @@ export default class ChatsService {
       chatId,
       userId: ctx.user.id,
       role: ChatMessageRole.User,
-      content: `Ik heb het bestand ${fileName} succesvol geüpload.`,
+      content: null,
       file: {
         name: fileName,
         size: fileSize,

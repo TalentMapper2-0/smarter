@@ -13,6 +13,7 @@ export type ChatSelectedCsvFile = {
 };
 
 type ChatCsvDropzoneProps = {
+  className?: string;
   disabled?: boolean;
   isUploading?: boolean;
   onCsvSelectedAction?: (file: File) => void | Promise<void>;
@@ -20,6 +21,7 @@ type ChatCsvDropzoneProps = {
 };
 
 export function ChatCsvDropzone({
+  className,
   disabled = false,
   isUploading = false,
   onCsvSelectedAction: onCsvSelected,
@@ -50,7 +52,7 @@ export function ChatCsvDropzone({
 
   if (selectedFile) {
     return (
-      <div className="mt-4 max-w-xl">
+      <div className={cn("w-full max-w-md", className)}>
         <div className="flex items-center gap-3 rounded-2xl bg-muted/40 px-4 py-3 border">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background">
             <FileText className="size-4 text-foreground" />
@@ -69,7 +71,7 @@ export function ChatCsvDropzone({
   }
 
   return (
-    <div className="mt-4 max-w-xl">
+    <div className={cn("mt-4 max-w-md", className)}>
       <div
         role="button"
         tabIndex={disabled || isUploading ? -1 : 0}

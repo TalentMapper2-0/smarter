@@ -21,6 +21,7 @@ import { ChatCsvColumnMapper } from "./chat-csv-column-mapper";
 import { ChatCsvDropzone, type ChatSelectedCsvFile } from "./chat-csv-dropzone";
 import { ColumnMapping, REQUIRED_FIELDS } from "./constants";
 import { createEmptyMapping, parseCsv, suggestMapping } from "./csv-utils";
+import { cn } from "@/lib/utils";
 
 type Props = {
   chat: Chat;
@@ -54,7 +55,7 @@ export default function AgentConversation({ chat }: Props) {
   } | null>(null);
   const [csvRowsState, setCsvRowsState] = useState<{
     chatId: string;
-    rows: any[];
+    rows: unknown[];
   } | null>(null);
   const shouldStreamInitialMessage = (chat.messages?.length ?? 0) === 0;
   const initialMessageContent =
@@ -66,9 +67,7 @@ export default function AgentConversation({ chat }: Props) {
       ? optimisticStatus.status
       : chat.status;
   const selectedCsvFile =
-    selectedCsvFileState?.chatId === chat.id
-      ? selectedCsvFileState.file
-      : null;
+    selectedCsvFileState?.chatId === chat.id ? selectedCsvFileState.file : null;
   const csvColumns =
     csvColumnsState?.chatId === chat.id ? csvColumnsState.columns : [];
   const columnMapping =
@@ -299,10 +298,14 @@ export default function AgentConversation({ chat }: Props) {
     });
 
     try {
-      const rowsToSave = (csvRowsState?.chatId === chat.id ? csvRowsState.rows : []).map((row) => {
-        const mappedRow: Record<string, any> = {};
+      const rowsToSave = (
+        csvRowsState?.chatId === chat.id ? csvRowsState.rows : []
+      ).map((row) => {
+        const rowObj = row as Record<string, unknown>;
+        const mappedRow: Record<string, unknown> = {};
         for (const field of REQUIRED_FIELDS) {
-          mappedRow[field] = row[nextMapping[field]];
+          const key = nextMapping[field] as string;
+          mappedRow[field] = rowObj[key];
         }
         return mappedRow;
       });
@@ -318,7 +321,7 @@ export default function AgentConversation({ chat }: Props) {
       setCsvColumnsState(null);
       setColumnMappingState(null);
       setCsvRowsState(null);
-      
+
       router.refresh();
     } catch {
       setOptimisticStatus({
@@ -366,38 +369,48 @@ export default function AgentConversation({ chat }: Props) {
         <ConversationContent>
           {messages.map((message, index) => (
             <Message key={message.id} from={message.role}>
-              <MessageContent>
-                {shouldStreamInitialMessage &&
-                index === 1 &&
-                message.role === ChatMessageRole.Assistant ? (
-                  <MessageResponse isAnimating>
-                    {message.content}
-                  </MessageResponse>
-                ) : (
-                  <MessageResponse>{message.content}</MessageResponse>
-                )}
+              {message.content && (
+                <MessageContent>
+                  {shouldStreamInitialMessage &&
+                  index === 1 &&
+                  message.role === ChatMessageRole.Assistant ? (
+                    <MessageResponse isAnimating>
+                      {message.content}
+                    </MessageResponse>
+                  ) : (
+                    <MessageResponse>{message.content}</MessageResponse>
+                  )}
+                </MessageContent>
+              )}
 
-                {message.files?.map((file) => (
-                  <ChatCsvDropzone key={file.id} selectedFile={file} />
-                ))}
+              {message.files?.map((file) => (
+                <ChatCsvDropzone
+                  key={file.id}
+                  className={cn(
+                    "mt-2",
+                    message.role === ChatMessageRole.User && "ml-auto"
+                  )}
+                  selectedFile={file}
+                />
+              ))}
 
-                {isWaitingForCsvInput &&
-                index === messages.length - 1 &&
-                message.role === ChatMessageRole.Assistant ? (
-                  <ChatCsvDropzone
-                    isUploading={updateChatStatus.isPending}
-                    onCsvSelectedAction={handleCsvSelected}
-                  />
-                ) : null}
-              </MessageContent>
+              {isWaitingForCsvInput &&
+              index === messages.length - 1 &&
+              message.role === ChatMessageRole.Assistant ? (
+                <ChatCsvDropzone
+                  isUploading={updateChatStatus.isPending}
+                  onCsvSelectedAction={handleCsvSelected}
+                />
+              ) : null}
             </Message>
           ))}
 
           {selectedCsvFile ? (
-            <Message from={ChatMessageRole.Assistant}>
-              <MessageContent>
-                <ChatCsvDropzone selectedFile={selectedCsvFile} />
-              </MessageContent>
+            <Message from={ChatMessageRole.User}>
+              <ChatCsvDropzone
+                className="ml-auto"
+                selectedFile={selectedCsvFile}
+              />
             </Message>
           ) : null}
 
@@ -406,7 +419,7 @@ export default function AgentConversation({ chat }: Props) {
               <MessageContent>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Spinner className="size-4" />
-                  <span>Thinking...</span>
+                  <span>Aan het denken...</span>
                 </div>
               </MessageContent>
             </Message>

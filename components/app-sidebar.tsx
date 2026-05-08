@@ -1,11 +1,6 @@
-"use client";
-
 import * as React from "react";
 
-import { NavMain } from "@/components/nav-main";
-import { NavProjects } from "@/components/nav-projects";
-import { NavSecondary } from "@/components/nav-secondary";
-import { NavUser } from "@/components/nav-user";
+import { SearchForm } from "@/components/search-form";
 import {
   Sidebar,
   SidebarContent,
@@ -14,44 +9,23 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail
 } from "@/components/ui/sidebar";
-import { LifeBuoyIcon, SendIcon, BrainCircuit } from "lucide-react";
+import { BrainCircuit, LifeBuoyIcon } from "lucide-react";
 import Link from "next/link";
+import { NavMain } from "./nav-main";
+import { NavProjects } from "./nav-projects";
+import { NavSecondary } from "./nav-secondary";
+import { NavUser } from "./nav-user";
 
 const data = {
-  navMain: [
-    // {
-    //   title: "Playground",
-    //   url: "#",
-    //   icon: <TerminalSquareIcon />,
-    //   isActive: true,
-    // },
-    // {
-    //   title: "Models",
-    //   url: "#",
-    //   icon: <BotIcon />,
-    // },
-    // {
-    //   title: "Documentation",
-    //   url: "#",
-    //   icon: <BookOpenIcon />,
-    // },
-    // {
-    //   title: "Settings",
-    //   url: "#",
-    //   icon: <Settings2Icon />,
-    // },
-  ],
+  navMain: [],
+
   navSecondary: [
     {
       title: "Support",
       url: "#",
       icon: <LifeBuoyIcon />,
-    },
-    {
-      title: "Feedback",
-      url: "#",
-      icon: <SendIcon />,
     },
   ],
 };
@@ -67,7 +41,7 @@ export function AppSidebar({
   };
 }) {
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -83,15 +57,17 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        {/* <SearchForm /> */}
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={[]} />
         <NavProjects />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

@@ -155,4 +155,25 @@ export const chatsRouter = router({
         });
       }
     }),
+  saveComment: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        commentText: z.string().trim().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ChatsService.saveComment(ctx, input);
+      } catch (error) {
+        console.error("chat.saveComment failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error ? error.message : "Failed to save comment",
+          cause: error,
+        });
+      }
+    }),
 });

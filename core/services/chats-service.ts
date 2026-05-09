@@ -2,6 +2,7 @@ import { Context } from "@/trpc/server/init";
 import ChatsRepository from "../repositories/chats-repository";
 import { Chat, ChatMessage, ChatStatus, ChatMessageRole } from "@/types/chat";
 import { CandidateCreate } from "@/types/candidate";
+import { getNextStatusAfterInput } from "@/lib/chat/workflow";
 
 export default class ChatsService {
   static async create(ctx: Context, title: string): Promise<Chat> {
@@ -132,6 +133,14 @@ export default class ChatsService {
       userId: ctx.user.id,
       candidates: mappedRows,
     });
+
+    await ChatsRepository.updateStatusForUser(ctx, {
+      id: chatId,
+      userId: ctx.user.id,
+      status:
+        getNextStatusAfterInput(ChatStatus.NeedsCsvColumnMapping) ??
+        ChatStatus.Closed,
+    });
   }
 
   static async saveVacancy(
@@ -158,6 +167,51 @@ export default class ChatsService {
     await ChatsRepository.saveVacancy(ctx, {
       chatId,
       vacancyText,
+    });
+
+    await ChatsRepository.updateStatusForUser(ctx, {
+      id: chatId,
+      userId: ctx.user.id,
+      status:
+        getNextStatusAfterInput(ChatStatus.WaitingForVacancy) ??
+        ChatStatus.Closed,
+    });
+
+    return message;
+  }
+
+  static async saveComment(
+    ctx: Context,
+    {
+      chatId,
+      commentText,
+    }: {
+      chatId: string;
+      commentText: string;
+    }
+  ): Promise<ChatMessage> {
+    if (!ctx.user) {
+      throw new Error("Not authenticated");
+    }
+
+    const message = await ChatsRepository.addMessage(ctx, {
+      chatId,
+      userId: ctx.user.id,
+      role: ChatMessageRole.User,
+      content: commentText,
+    });
+
+    await ChatsRepository.saveComment(ctx, {
+      chatId,
+      commentText,
+    });
+
+    await ChatsRepository.updateStatusForUser(ctx, {
+      id: chatId,
+      userId: ctx.user.id,
+      status:
+        getNextStatusAfterInput(ChatStatus.WaitingForComment) ??
+        ChatStatus.Closed,
     });
 
     return message;

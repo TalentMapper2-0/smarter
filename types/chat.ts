@@ -19,12 +19,15 @@ export enum ChatStatus {
   WaitingForCsvInput = "waiting_for_csv_input",
   MappingCsvColumns = "mapping_csv_columns",
   NeedsCsvColumnMapping = "needs_csv_column_mapping",
+  CsvColumnsMatched = "csv_columns_matched",
   WaitingForVacancy = "waiting_for_vacancy",
+  CommentRequest = "comment_request",
   WaitingForComment = "waiting_for_comment",
   ReadyToClassify = "ready_to_classify",
   ClassifyingCandidates = "classifying_candidates",
   ClassificationComplete = "classification_complete",
   ClassificationFailed = "classification_failed",
+  Closed = "closed",
 }
 
 export enum ChatMessageRole {

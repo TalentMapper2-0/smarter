@@ -1,13 +1,26 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
+import {
+  Confirmation,
+  ConfirmationAction,
+  ConfirmationActions,
+  ConfirmationRequest,
+  ConfirmationTitle,
+} from "@/components/ai-elements/confirmation";
 import { Spinner } from "@/components/ui/spinner";
-import { messages as chatMessages, type MessageKey } from "@/lib/chat/messages";
+import { messages as chatMessages } from "@/lib/chat/messages";
 import { trpc } from "@/trpc/client/client";
 import { Chat, ChatMessage, ChatMessageRole, ChatStatus } from "@/types/chat";
 import {
@@ -50,6 +63,8 @@ export default function AgentConversation({ chat }: Props) {
   const saveMappedCsv = trpc.chat.saveMappedCsv.useMutation();
   const uploadCsvMetadata = trpc.chat.uploadCsvMetadata.useMutation();
   const saveVacancy = trpc.chat.saveVacancy.useMutation();
+  const saveComment = trpc.chat.saveComment.useMutation();
+  const requestedStreamStatusRef = useRef<string | null>(null);
   const [localMessageState, setLocalMessageState] = useState<{
     chatId: string;
     messages: ChatMessage[];
@@ -90,13 +105,6 @@ export default function AgentConversation({ chat }: Props) {
     ...(chat.messages ?? []),
     ...(localMessageState.chatId === chat.id ? localMessageState.messages : []),
   ];
-  const shouldStreamInitialMessage =
-    chat.status === ChatStatus.Initialized &&
-    !persistedMessages.some(
-      (message) =>
-        message.role === ChatMessageRole.Assistant &&
-        message.content === chatMessages.chatInitialized
-    );
   const streamedMessageContent =
     streamedAssistantMessage.chatId === chat.id
       ? streamedAssistantMessage.content
@@ -145,26 +153,21 @@ export default function AgentConversation({ chat }: Props) {
   const isNeedsCsvColumnMapping =
     currentStatus === ChatStatus.NeedsCsvColumnMapping;
   const isWaitingForVacancy = currentStatus === ChatStatus.WaitingForVacancy;
+  const isCommentRequest = currentStatus === ChatStatus.CommentRequest;
+  const isWaitingForComment = currentStatus === ChatStatus.WaitingForComment;
+  const canSubmitText = isWaitingForVacancy || isWaitingForComment;
   const isChatInputDisabled =
-    shouldStreamInitialMessage ||
     hasPendingStreamMessage ||
     isWaitingForCsvInput ||
     isMappingCsvColumns ||
-    isNeedsCsvColumnMapping;
-  const messages = [
-    ...persistedMessages,
-    ...(shouldStreamInitialMessage
-      ? [
-          {
-            id: `chat-initial-message-${chat.id}`,
-            chatId: chat.id,
-            role: ChatMessageRole.Assistant,
-            content: streamedMessageContent,
-            files: [],
-          },
-        ]
-      : []),
-  ];
+    isNeedsCsvColumnMapping ||
+    !canSubmitText;
+  const composerPlaceholder = isWaitingForVacancy
+    ? "Plak de vacaturetekst"
+    : isWaitingForComment
+      ? "Voeg opmerkingen toe"
+      : "Antwoorden";
+  const messages = persistedMessages;
 
   const appendLocalMessage = useCallback(
     (message: {
@@ -185,164 +188,144 @@ export default function AgentConversation({ chat }: Props) {
     []
   );
 
-  const streamAssistantMessage = useCallback(
-    async ({
-      messageKey,
-      nextStatus,
-    }: {
-      messageKey?: MessageKey;
-      nextStatus?: ChatStatus;
-    } = {}) => {
-      const abortController = new AbortController();
-      let fullContent = "";
-      setStreamedAssistantMessage({
-        chatId: chat.id,
-        content: "",
-        isStreaming: true,
-      });
+  const streamAssistantMessage = useCallback(async () => {
+    const abortController = new AbortController();
+    let fullContent = "";
+    setStreamedAssistantMessage({
+      chatId: chat.id,
+      content: "",
+      isStreaming: true,
+    });
 
-      const appendStreamedAssistantMessage = (chunk: string) => {
-        startTransition(() => {
-          setStreamedAssistantMessage((currentMessage) => {
-            if (currentMessage.chatId !== chat.id) {
-              return {
-                chatId: chat.id,
-                content: chunk,
-                isStreaming: true,
-              };
-            }
-
+    const appendStreamedAssistantMessage = (chunk: string) => {
+      startTransition(() => {
+        setStreamedAssistantMessage((currentMessage) => {
+          if (currentMessage.chatId !== chat.id) {
             return {
               chatId: chat.id,
-              content: currentMessage.content + chunk,
+              content: chunk,
               isStreaming: true,
             };
-          });
-        });
-      };
-
-      try {
-        const response = await fetch(`/api/chats/${chat.id}/stream`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messageKey,
-            nextStatus,
-          }),
-          signal: abortController.signal,
-        });
-
-        if (response.status === 204) {
-          if (nextStatus) {
-            setOptimisticStatus({
-              chatId: chat.id,
-              status: nextStatus,
-            });
           }
-          void utils.chat.listRecent.invalidate();
+
+          return {
+            chatId: chat.id,
+            content: currentMessage.content + chunk,
+            isStreaming: true,
+          };
+        });
+      });
+    };
+
+    try {
+      const response = await fetch(`/api/chats/${chat.id}/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+        signal: abortController.signal,
+      });
+
+      if (response.status === 204) {
+        void utils.chat.listRecent.invalidate();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to stream chat message");
+      }
+
+      if (!response.body) {
+        throw new Error("Chat message stream is empty");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const handleStreamLine = (line: string) => {
+        if (!line.trim()) {
           return;
         }
 
-        if (!response.ok) {
-          throw new Error("Failed to stream chat message");
+        const event = JSON.parse(line) as StreamEvent;
+
+        if (event.type === "chunk") {
+          fullContent += event.content;
+          appendStreamedAssistantMessage(event.content);
+          return;
         }
 
-        if (!response.body) {
-          throw new Error("Chat message stream is empty");
+        if (event.type === "done" && event.nextStatus) {
+          setOptimisticStatus({
+            chatId: chat.id,
+            status: event.nextStatus,
+          });
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
+        buffer += decoder.decode(value, { stream: true });
 
-        const handleStreamLine = (line: string) => {
-          if (!line.trim()) {
-            return;
-          }
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
 
-          const event = JSON.parse(line) as StreamEvent;
-
-          if (event.type === "chunk") {
-            fullContent += event.content;
-            appendStreamedAssistantMessage(event.content);
-            return;
-          }
-
-          if (event.type === "done" && event.nextStatus) {
-            setOptimisticStatus({
-              chatId: chat.id,
-              status: event.nextStatus,
-            });
-          }
-        };
-
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            break;
-          }
-
-          buffer += decoder.decode(value, { stream: true });
-
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            handleStreamLine(line);
-          }
+        for (const line of lines) {
+          handleStreamLine(line);
         }
-
-        buffer += decoder.decode();
-
-        if (buffer) {
-          handleStreamLine(buffer);
-        }
-
-        const remainingChunk = decoder.decode();
-
-        if (remainingChunk) {
-          fullContent += remainingChunk;
-          appendStreamedAssistantMessage(remainingChunk);
-        }
-        appendLocalMessage({
-          id: createLocalMessageKey(),
-          chatId: chat.id,
-          role: ChatMessageRole.Assistant,
-          content: fullContent,
-          files: [],
-        });
-
-        void utils.chat.listRecent.invalidate();
-      } finally {
-        abortController.abort();
-        setStreamedAssistantMessage({
-          chatId: chat.id,
-          content: "",
-          isStreaming: false,
-        });
       }
-    },
-    [appendLocalMessage, chat.id, utils.chat.listRecent]
-  );
+
+      buffer += decoder.decode();
+
+      if (buffer) {
+        handleStreamLine(buffer);
+      }
+
+      const remainingChunk = decoder.decode();
+
+      if (remainingChunk) {
+        fullContent += remainingChunk;
+        appendStreamedAssistantMessage(remainingChunk);
+      }
+      appendLocalMessage({
+        id: createLocalMessageKey(),
+        chatId: chat.id,
+        role: ChatMessageRole.Assistant,
+        content: fullContent,
+        files: [],
+      });
+
+      void utils.chat.listRecent.invalidate();
+    } finally {
+      abortController.abort();
+      setStreamedAssistantMessage({
+        chatId: chat.id,
+        content: "",
+        isStreaming: false,
+      });
+    }
+  }, [appendLocalMessage, chat.id, utils.chat.listRecent]);
 
   useEffect(() => {
-    if (!shouldStreamInitialMessage) {
+    const streamStatusKey = `${chat.id}:${currentStatus}`;
+
+    if (requestedStreamStatusRef.current === streamStatusKey) {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      void streamAssistantMessage().catch((error) => {
-        console.error("Failed to stream initial chat message", error);
-      });
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [shouldStreamInitialMessage, streamAssistantMessage]);
+    requestedStreamStatusRef.current = streamStatusKey;
+    void streamAssistantMessage().catch((error) => {
+      requestedStreamStatusRef.current = null;
+      console.error("Failed to stream chat status message", error);
+    });
+  }, [chat.id, currentStatus, streamAssistantMessage]);
 
   const mapRowsToCandidates = (
     rows: unknown[],
@@ -414,7 +397,6 @@ export default function AgentConversation({ chat }: Props) {
         fileSize: file.size,
       });
       appendLocalMessage(uploadedMessage);
-      setSelectedCsvFileState(null);
 
       if (allFieldsMapped) {
         await saveMappedCsv.mutateAsync({
@@ -427,9 +409,9 @@ export default function AgentConversation({ chat }: Props) {
         setCsvColumnsState(null);
         setColumnMappingState(null);
         setCsvRowsState(null);
-        setOptimisticStatus(null);
-        await streamAssistantMessage({
-          messageKey: "vacancyRequest",
+        setOptimisticStatus({
+          chatId: chat.id,
+          status: ChatStatus.CsvColumnsMatched,
         });
         setSelectedCsvFileState(null);
         return;
@@ -447,13 +429,15 @@ export default function AgentConversation({ chat }: Props) {
         chatId: chat.id,
         mapping: nextMapping,
       });
-      setOptimisticStatus({
-        chatId: chat.id,
+
+      await updateChatStatus.mutateAsync({
+        id: chat.id,
         status: ChatStatus.NeedsCsvColumnMapping,
       });
 
-      await streamAssistantMessage({
-        messageKey: "csvNeedsColumnMapping",
+      setOptimisticStatus({
+        chatId: chat.id,
+        status: ChatStatus.NeedsCsvColumnMapping,
       });
     } catch (error) {
       setSelectedCsvFileState(null);
@@ -479,14 +463,6 @@ export default function AgentConversation({ chat }: Props) {
     if (!allFieldsMapped) {
       return;
     }
-
-    const nextStatus = ChatStatus.WaitingForVacancy;
-
-    setOptimisticStatus({
-      chatId: chat.id,
-      status: nextStatus,
-    });
-
     try {
       const rowsToSave = mapRowsToCandidates(
         csvRowsState?.chatId === chat.id ? csvRowsState.rows : [],
@@ -503,10 +479,9 @@ export default function AgentConversation({ chat }: Props) {
       setCsvColumnsState(null);
       setColumnMappingState(null);
       setCsvRowsState(null);
-      setOptimisticStatus(null);
-
-      await streamAssistantMessage({
-        messageKey: "vacancyRequest",
+      setOptimisticStatus({
+        chatId: chat.id,
+        status: ChatStatus.CsvColumnsMatched,
       });
       setSelectedCsvFileState(null);
     } catch {
@@ -537,8 +512,9 @@ export default function AgentConversation({ chat }: Props) {
       setCsvColumnsState(null);
       setColumnMappingState(null);
       setCsvRowsState(null);
-      await streamAssistantMessage({
-        messageKey: "csvReuploadOk",
+      await updateChatStatus.mutateAsync({
+        id: chat.id,
+        status: ChatStatus.WaitingForCsvInput,
       });
     } catch (error) {
       console.error("Failed to reupload csv", error);
@@ -564,14 +540,63 @@ export default function AgentConversation({ chat }: Props) {
         appendLocalMessage(savedMessage);
         setOptimisticUserTextState(null);
 
-        await streamAssistantMessage({
-          messageKey: "vacancyUploaded",
+        setOptimisticStatus({
+          chatId: chat.id,
+          status: ChatStatus.CommentRequest,
         });
         setOptimisticUserTextState(null);
       } catch (error) {
         setOptimisticUserTextState(null);
         console.error("Failed to save vacancy", error);
       }
+      return;
+    }
+
+    if (isWaitingForComment) {
+      setOptimisticUserTextState({
+        chatId: chat.id,
+        content,
+      });
+
+      try {
+        const savedMessage = await saveComment.mutateAsync({
+          chatId: chat.id,
+          commentText: content,
+        });
+        appendLocalMessage(savedMessage);
+        setOptimisticUserTextState(null);
+        setOptimisticStatus({
+          chatId: chat.id,
+          status: ChatStatus.ReadyToClassify,
+        });
+      } catch (error) {
+        setOptimisticUserTextState(null);
+        console.error("Failed to save comment", error);
+      }
+    }
+  };
+
+  const handleCommentChoice = async (wantsComment: boolean) => {
+    const nextStatus = wantsComment
+      ? ChatStatus.WaitingForComment
+      : ChatStatus.ReadyToClassify;
+
+    setOptimisticStatus({
+      chatId: chat.id,
+      status: nextStatus,
+    });
+
+    try {
+      await updateChatStatus.mutateAsync({
+        id: chat.id,
+        status: nextStatus,
+      });
+    } catch (error) {
+      setOptimisticStatus({
+        chatId: chat.id,
+        status: ChatStatus.CommentRequest,
+      });
+      console.error("Failed to confirm comment choice", error);
     }
   };
 
@@ -583,12 +608,7 @@ export default function AgentConversation({ chat }: Props) {
             <Message key={message.id} from={message.role}>
               {message.content && (
                 <MessageContent>
-                  {shouldStreamInitialMessage &&
-                  message.id === `chat-initial-message-${chat.id}` ? (
-                    <MessageResponse isAnimating>
-                      {message.content}
-                    </MessageResponse>
-                  ) : message.id === `chat-stream-message-${chat.id}` ? (
+                  {message.id === `chat-stream-message-${chat.id}` ? (
                     <MessageResponse isAnimating>
                       {message.content}
                     </MessageResponse>
@@ -628,7 +648,7 @@ export default function AgentConversation({ chat }: Props) {
             </Message>
           ) : null}
 
-          {hasPendingStreamMessage && !shouldStreamInitialMessage ? (
+          {hasPendingStreamMessage ? (
             <Message from={ChatMessageRole.Assistant}>
               <MessageContent>
                 <MessageResponse isAnimating>
@@ -649,9 +669,7 @@ export default function AgentConversation({ chat }: Props) {
             </Message>
           ) : null}
 
-          {isWaitingForCsvInput &&
-          !shouldStreamInitialMessage &&
-          !hasPendingStreamMessage ? (
+          {isWaitingForCsvInput && !hasPendingStreamMessage ? (
             <Message from={ChatMessageRole.Assistant}>
               <ChatCsvDropzone
                 isUploading={
@@ -682,6 +700,42 @@ export default function AgentConversation({ chat }: Props) {
               </MessageContent>
             </Message>
           ) : null}
+
+          {isCommentRequest && !hasPendingStreamMessage ? (
+            <Message from={ChatMessageRole.Assistant}>
+              <MessageContent className="w-full max-w-xl">
+                <Confirmation
+                  approval={{ id: `${chat.id}-comment-request` }}
+                  state="approval-requested"
+                >
+                  <ConfirmationTitle>
+                    <ConfirmationRequest>
+                      Wil je nog opmerkingen toevoegen?
+                    </ConfirmationRequest>
+                  </ConfirmationTitle>
+                  <ConfirmationActions>
+                    <ConfirmationAction
+                      disabled={updateChatStatus.isPending}
+                      onClick={() => {
+                        void handleCommentChoice(false);
+                      }}
+                      variant="outline"
+                    >
+                      Nee
+                    </ConfirmationAction>
+                    <ConfirmationAction
+                      disabled={updateChatStatus.isPending}
+                      onClick={() => {
+                        void handleCommentChoice(true);
+                      }}
+                    >
+                      Ja
+                    </ConfirmationAction>
+                  </ConfirmationActions>
+                </Confirmation>
+              </MessageContent>
+            </Message>
+          ) : null}
         </ConversationContent>
 
         <ConversationScrollButton />
@@ -689,7 +743,7 @@ export default function AgentConversation({ chat }: Props) {
       <div className="shrink-0 bg-background px-4 pt-2 pb-4">
         <ChatComposer
           disabled={isChatInputDisabled}
-          placeholder="Antwoorden"
+          placeholder={composerPlaceholder}
           onSubmitAction={handleChatSubmit}
         />
       </div>

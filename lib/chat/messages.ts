@@ -2,8 +2,7 @@ export const messages = {
   chatInitialized:
     "Je gesprek is gestart. Upload een CSV-bestand om te beginnen.",
 
-  csvAnalyzing:
-    "Ik analyseer je CSV-bestand.",
+  csvAnalyzing: "Ik analyseer je CSV-bestand.",
 
   csvColumnsMatched:
     "Goed nieuws, ik heb de kolommen gekoppeld. Je kunt doorgaan.",
@@ -14,10 +13,14 @@ export const messages = {
   csvUploadNew:
     "Ik kon dit CSV-bestand niet gebruiken. Upload een nieuw CSV-bestand.",
 
-  csvReuploadOk:
-    "Oké, probeer het bestand opnieuw te uploaden.",
+  csvReuploadOk: "Oké, probeer het bestand opnieuw te uploaden.",
   vacancyRequest: "Plak de vacaturetekst hieronder.",
-  vacancyUploaded: "Vacature succesvol geüpload. Heb je nog opmerkingen?",
+  commentRequest:
+    "Vacature succesvol geüpload. Wil je nog opmerkingen toevoegen?",
+  commentTextRequest: "Typ je opmerkingen hieronder.",
+  readyToClassify:
+    "Dank je. Alles staat klaar om de kandidaten te classificeren.",
+  chatClosed: "Deze chat is afgesloten.",
 } as const;
 
 export type MessageKey = keyof typeof messages;

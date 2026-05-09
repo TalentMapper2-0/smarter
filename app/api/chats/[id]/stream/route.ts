@@ -1,7 +1,6 @@
 import "server-only";
 
 import ChatManagerService from "@/core/services/chat-manager-service";
-import { messages as chatMessages, type MessageKey } from "@/lib/chat/messages";
 import { createServerContext } from "@/trpc/server/caller";
 import z from "zod";
 
@@ -14,10 +13,7 @@ type RouteContext = {
 };
 
 const chatIdSchema = z.uuid();
-const messageKeys = Object.keys(chatMessages) as [MessageKey, ...MessageKey[]];
-const requestSchema = z.object({
-  messageKey: z.enum(messageKeys).optional(),
-});
+const requestSchema = z.object({}).optional();
 
 const streamHeaders = {
   "Cache-Control": "no-cache, no-transform",
@@ -58,7 +54,6 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const plan = await ChatManagerService.getNextStreamPlan(ctx, {
     chatId: parsedChatId.data,
-    ...parsedBody.data,
   });
 
   if (plan.type === "not-found") {

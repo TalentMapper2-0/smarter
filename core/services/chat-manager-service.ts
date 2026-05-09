@@ -1,4 +1,8 @@
-import { messages as chatMessages, type MessageKey } from "@/lib/chat/messages";
+import { messages as chatMessages } from "@/lib/chat/messages";
+import {
+  getChatStatusStep,
+  getNextStatusAfterStatusMessage,
+} from "@/lib/chat/workflow";
 import { Context } from "@/trpc/server/init";
 import { ChatMessageRole, ChatStatus } from "@/types/chat";
 import ChatsRepository from "../repositories/chats-repository";
@@ -6,11 +10,6 @@ import ChatsRepository from "../repositories/chats-repository";
 export type ChatManagerStreamMessage = {
   role: ChatMessageRole.Assistant;
   content: string;
-};
-
-type StreamRequest = {
-  messageKey?: MessageKey;
-  nextStatus?: ChatStatus;
 };
 
 export type ChatManagerStreamPlan =
@@ -29,7 +28,7 @@ export type ChatManagerStreamPlan =
 export default class ChatManagerService {
   static async getNextStreamPlan(
     ctx: Context,
-    { chatId, messageKey, nextStatus }: { chatId: string } & StreamRequest
+    { chatId }: { chatId: string }
   ): Promise<ChatManagerStreamPlan> {
     if (!ctx.user) {
       throw new Error("Not authenticated");
@@ -44,54 +43,31 @@ export default class ChatManagerService {
       return { type: "not-found" };
     }
 
-    if (messageKey) {
-      const content = chatMessages[messageKey];
+    const step = getChatStatusStep(chat.status);
 
-      if (!content) {
-        return { type: "empty" };
-      }
-
-      return {
-        type: "message",
-        message: {
-          role: ChatMessageRole.Assistant,
-          content,
-        },
-        nextStatus,
-      };
+    if (!step.messageKey) {
+      return { type: "empty" };
     }
 
-    switch (chat.status) {
-      case ChatStatus.Initialized:
-        if (
-          chat.messages?.some(
-            (message) =>
-              message.role === ChatMessageRole.Assistant &&
-              message.content === chatMessages.chatInitialized
-          )
-        ) {
-          return { type: "empty" };
-        }
+    const content = chatMessages[step.messageKey];
+    const hasSentStatusMessage = chat.messages?.some(
+      (message) =>
+        message.role === ChatMessageRole.Assistant &&
+        message.content === content
+    );
 
-        return {
-          type: "message",
-          message: {
-            role: ChatMessageRole.Assistant,
-            content: chatMessages.chatInitialized,
-          },
-          nextStatus: ChatStatus.WaitingForCsvInput,
-        };
-
-      case ChatStatus.WaitingForCsvInput:
-      case ChatStatus.MappingCsvColumns:
-      case ChatStatus.NeedsCsvColumnMapping:
-      case ChatStatus.WaitingForVacancy:
-      case ChatStatus.WaitingForComment:
-        return { type: "empty" };
-
-      default:
-        return { type: "empty" };
+    if (hasSentStatusMessage) {
+      return { type: "empty" };
     }
+
+    return {
+      type: "message",
+      message: {
+        role: ChatMessageRole.Assistant,
+        content,
+      },
+      nextStatus: getNextStatusAfterStatusMessage(chat.status),
+    };
   }
 
   static async persistStreamedStep(

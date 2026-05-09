@@ -46,21 +46,27 @@ function formatDate(value: string) {
 
 function getCompletedSteps(chat: Chat) {
   const isUploadComplete =
+    chat.status === ChatStatus.CsvColumnsMatched ||
     chat.status === ChatStatus.WaitingForVacancy ||
+    chat.status === ChatStatus.CommentRequest ||
     chat.status === ChatStatus.WaitingForComment ||
     chat.status === ChatStatus.ReadyToClassify ||
     chat.status === ChatStatus.ClassifyingCandidates ||
     chat.status === ChatStatus.ClassificationComplete ||
-    chat.status === ChatStatus.ClassificationFailed;
+    chat.status === ChatStatus.ClassificationFailed ||
+    chat.status === ChatStatus.Closed;
 
   const isClassificationComplete =
-    chat.status === ChatStatus.ClassificationComplete;
+    chat.status === ChatStatus.ClassificationComplete ||
+    chat.status === ChatStatus.Closed;
 
   const isVacancyComplete =
+    chat.status === ChatStatus.CommentRequest ||
     chat.status === ChatStatus.WaitingForComment ||
     chat.status === ChatStatus.ReadyToClassify ||
     chat.status === ChatStatus.ClassifyingCandidates ||
-    chat.status === ChatStatus.ClassificationComplete;
+    chat.status === ChatStatus.ClassificationComplete ||
+    chat.status === ChatStatus.Closed;
 
   let completed = 0;
   if (isUploadComplete) completed += 1;
@@ -74,16 +80,22 @@ function getChatStatus(chat: Chat) {
   switch (chat.status) {
     case ChatStatus.ClassificationComplete:
       return "Klaar";
+    case ChatStatus.Closed:
+      return "Afgesloten";
     case ChatStatus.ClassifyingCandidates:
       return "Bezig met classificatie";
     case ChatStatus.ClassificationFailed:
       return "Aandacht nodig (Classificatie gefaald)";
     case ChatStatus.ReadyToClassify:
       return "Wachten op classificatie";
+    case ChatStatus.CommentRequest:
+      return "Opmerking bevestigen";
     case ChatStatus.WaitingForComment:
       return "Wachten op opmerking";
     case ChatStatus.WaitingForVacancy:
       return "Wachten op vacature";
+    case ChatStatus.CsvColumnsMatched:
+      return "Kolommen gekoppeld";
     case ChatStatus.NeedsCsvColumnMapping:
       return "Kolommen koppelen";
     case ChatStatus.MappingCsvColumns:
@@ -107,7 +119,9 @@ export default async function Page() {
     [
       ChatStatus.WaitingForCsvInput,
       ChatStatus.NeedsCsvColumnMapping,
+      ChatStatus.CsvColumnsMatched,
       ChatStatus.WaitingForVacancy,
+      ChatStatus.CommentRequest,
       ChatStatus.WaitingForComment,
       ChatStatus.ReadyToClassify,
       ChatStatus.ClassificationFailed,
@@ -188,9 +202,7 @@ export default async function Page() {
                         <BrainCircuitIcon className="size-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-medium">
-                          {chat.title}
-                        </p>
+                        <p className="truncate font-medium">{chat.title}</p>
                         <p className="text-sm text-muted-foreground">
                           Aangemaakt op {formatDate(chat.createdAt)}
                         </p>
@@ -198,9 +210,7 @@ export default async function Page() {
                     </div>
 
                     <div className="flex items-center gap-3 sm:justify-end">
-                      <Badge variant="outline">
-                        {getChatStatus(chat)}
-                      </Badge>
+                      <Badge variant="outline">{getChatStatus(chat)}</Badge>
                       <span className="text-sm text-muted-foreground">
                         {getCompletedSteps(chat)}/3 stappen
                       </span>

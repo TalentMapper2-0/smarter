@@ -216,4 +216,38 @@ export default class ChatsService {
 
     return message;
   }
+
+  static async confirmComment(
+    ctx: Context,
+    {
+      chatId,
+      wantsComment,
+    }: {
+      chatId: string;
+      wantsComment: boolean;
+    }
+  ): Promise<ChatMessage> {
+    if (!ctx.user) {
+      throw new Error("Not authenticated");
+    }
+
+    const nextStatus = wantsComment
+      ? ChatStatus.WaitingForComment
+      : ChatStatus.ReadyToClassify;
+
+    const message = await ChatsRepository.addMessage(ctx, {
+      chatId,
+      userId: ctx.user.id,
+      role: ChatMessageRole.User,
+      content: wantsComment ? "Ja" : "Nee",
+    });
+
+    await ChatsRepository.updateStatusForUser(ctx, {
+      id: chatId,
+      userId: ctx.user.id,
+      status: nextStatus,
+    });
+
+    return message;
+  }
 }

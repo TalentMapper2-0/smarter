@@ -176,4 +176,25 @@ export const chatsRouter = router({
         });
       }
     }),
+  confirmComment: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        wantsComment: z.boolean(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ChatsService.confirmComment(ctx, input);
+      } catch (error) {
+        console.error("chat.confirmComment failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error ? error.message : "Failed to confirm comment",
+          cause: error,
+        });
+      }
+    }),
 });

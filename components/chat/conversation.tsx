@@ -64,6 +64,7 @@ export default function AgentConversation({ chat }: Props) {
   const uploadCsvMetadata = trpc.chat.uploadCsvMetadata.useMutation();
   const saveVacancy = trpc.chat.saveVacancy.useMutation();
   const saveComment = trpc.chat.saveComment.useMutation();
+  const confirmComment = trpc.chat.confirmComment.useMutation();
   const requestedStreamStatusRef = useRef<string | null>(null);
   const [localMessageState, setLocalMessageState] = useState<{
     chatId: string;
@@ -581,17 +582,25 @@ export default function AgentConversation({ chat }: Props) {
       ? ChatStatus.WaitingForComment
       : ChatStatus.ReadyToClassify;
 
-    setOptimisticStatus({
+    setOptimisticUserTextState({
       chatId: chat.id,
-      status: nextStatus,
+      content: wantsComment ? "Ja" : "Nee",
     });
 
     try {
-      await updateChatStatus.mutateAsync({
-        id: chat.id,
+      const savedMessage = await confirmComment.mutateAsync({
+        chatId: chat.id,
+        wantsComment,
+      });
+      appendLocalMessage(savedMessage);
+      setOptimisticUserTextState(null);
+
+      setOptimisticStatus({
+        chatId: chat.id,
         status: nextStatus,
       });
     } catch (error) {
+      setOptimisticUserTextState(null);
       setOptimisticStatus({
         chatId: chat.id,
         status: ChatStatus.CommentRequest,

@@ -1,3 +1,5 @@
+import { JsonObject } from "./json";
+
 export type MessageFile = {
   id: string;
   messageId: string;
@@ -30,19 +32,33 @@ export enum ChatStatus {
   Closed = "closed",
 }
 
+export enum ChatMessageType {
+  Text = "text",
+  CsvFile = "csv_file",
+  CommentRequest = "comment_request",
+  ClassificationResult = "classification_result",
+  Error = "error",
+  CsvColumnMappingRequest = "csv_column_mapping_request",
+  CsvUploadRequest = "csv_upload_request",
+  EndOfChat = "end_of_chat",
+}
+
 export enum ChatMessageRole {
   User = "user",
   Assistant = "assistant",
 }
 
 export type ChatMessage = {
-  id: string;
-  chatId: string;
-  role: ChatMessageRole;
-  content: string | null;
-  createdAt?: string;
-  files?: MessageFile[];
-};
+  [Type in ChatMessageType]: {
+    id: string;
+    chatId: string;
+    role: ChatMessageRole;
+    type: Type;
+    content: string | null;
+    metadata: ChatMessageMetadataByType[Type];
+    createdAt: string;
+  };
+}[ChatMessageType];
 
 export type RequestMode = "vacancy" | "csv" | "comment" | "ready";
 
@@ -51,4 +67,36 @@ export type VacancyRequestState = {
   vacancy: string;
   csvFile: File | null;
   comment: string;
+};
+
+export type ChatMessageMetadataByType = {
+  [ChatMessageType.Text]: Record<string, never>;
+
+  [ChatMessageType.CsvFile]: {
+    fileName: string;
+    fileSize: number;
+  };
+
+  [ChatMessageType.CsvColumnMappingRequest]: {
+    answered: boolean;
+    importId: string;
+  };
+
+  [ChatMessageType.CommentRequest]: {
+    answered: boolean;
+    answer?: boolean;
+  };
+
+  [ChatMessageType.ClassificationResult]: {
+    runId: string;
+  };
+
+  [ChatMessageType.CsvUploadRequest]: {
+    answered: boolean;
+  };
+
+  [ChatMessageType.Error]: {
+    code?: string;
+    retryable?: boolean;
+  };
 };

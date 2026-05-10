@@ -4,12 +4,14 @@ import {
   getNextStatusAfterStatusMessage,
 } from "@/lib/chat/workflow";
 import { Context } from "@/trpc/server/init";
-import { ChatMessageRole, ChatStatus } from "@/types/chat";
+import { ChatMessageRole, ChatMessageType, ChatStatus } from "@/types/chat";
 import ChatsRepository from "../repositories/chats-repository";
 
 export type ChatManagerStreamMessage = {
   role: ChatMessageRole.Assistant;
+  type: ChatMessageType;
   content: string;
+  metadata: Record<string, unknown>;
 };
 
 export type ChatManagerStreamPlan =
@@ -50,10 +52,14 @@ export default class ChatManagerService {
     }
 
     const content = chatMessages[step.messageKey];
+    const type = getMessageTypeForStatus(chat.status);
+    const metadata = getMessageMetadataForStatus(chat.status, chatId);
     const hasSentStatusMessage = chat.messages?.some(
       (message) =>
         message.role === ChatMessageRole.Assistant &&
-        message.content === content
+        (isRequestMessageType(type)
+          ? message.type === type
+          : message.type === type && message.content === content)
     );
 
     if (hasSentStatusMessage) {
@@ -64,7 +70,9 @@ export default class ChatManagerService {
       type: "message",
       message: {
         role: ChatMessageRole.Assistant,
+        type,
         content,
+        metadata,
       },
       nextStatus: getNextStatusAfterStatusMessage(chat.status),
     };
@@ -76,11 +84,15 @@ export default class ChatManagerService {
       chatId,
       content,
       role,
+      type,
+      metadata,
       nextStatus,
     }: {
       chatId: string;
       content: string;
       role: ChatMessageRole;
+      type: ChatMessageType;
+      metadata: Record<string, unknown>;
       nextStatus?: ChatStatus;
     }
   ) {
@@ -93,7 +105,46 @@ export default class ChatManagerService {
       userId: ctx.user.id,
       content,
       role,
+      type,
+      metadata,
       nextStatus,
     });
   }
+}
+
+function getMessageTypeForStatus(status: ChatStatus): ChatMessageType {
+  switch (status) {
+    case ChatStatus.Initialized:
+      return ChatMessageType.CsvUploadRequest;
+    case ChatStatus.NeedsCsvColumnMapping:
+      return ChatMessageType.CsvColumnMappingRequest;
+    case ChatStatus.CommentRequest:
+      return ChatMessageType.CommentRequest;
+    default:
+      return ChatMessageType.Text;
+  }
+}
+
+function getMessageMetadataForStatus(
+  status: ChatStatus,
+  chatId: string
+): Record<string, unknown> {
+  switch (status) {
+    case ChatStatus.Initialized:
+      return { answered: false };
+    case ChatStatus.NeedsCsvColumnMapping:
+      return { answered: false, importId: chatId };
+    case ChatStatus.CommentRequest:
+      return { answered: false };
+    default:
+      return {};
+  }
+}
+
+function isRequestMessageType(type: ChatMessageType) {
+  return (
+    type === ChatMessageType.CsvUploadRequest ||
+    type === ChatMessageType.CsvColumnMappingRequest ||
+    type === ChatMessageType.CommentRequest
+  );
 }

@@ -1,5 +1,3 @@
-import { JsonObject } from "./json";
-
 export type MessageFile = {
   id: string;
   messageId: string;
@@ -41,6 +39,7 @@ export enum ChatMessageType {
   CsvColumnMappingRequest = "csv_column_mapping_request",
   CsvUploadRequest = "csv_upload_request",
   EndOfChat = "end_of_chat",
+  Unsupported = "unsupported",
 }
 
 export enum ChatMessageRole {
@@ -70,7 +69,7 @@ export type VacancyRequestState = {
 };
 
 export type ChatMessageMetadataByType = {
-  [ChatMessageType.Text]: Record<string, never>;
+  [ChatMessageType.Text]: Record<string, unknown>;
 
   [ChatMessageType.CsvFile]: {
     fileName: string;
@@ -99,4 +98,8 @@ export type ChatMessageMetadataByType = {
     code?: string;
     retryable?: boolean;
   };
+
+  [ChatMessageType.Unsupported]: Record<string, unknown>;
+
+  [ChatMessageType.EndOfChat]: Record<string, unknown>;
 };

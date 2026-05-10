@@ -12,32 +12,30 @@ import {
   ConversationContent,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import {
-  Confirmation,
-  ConfirmationAction,
-  ConfirmationActions,
-  ConfirmationRequest,
-  ConfirmationTitle,
-} from "@/components/ai-elements/confirmation";
 import { Spinner } from "@/components/ui/spinner";
+import { mapDbMessageToChatMessage } from "@/lib/chat/message-mappers";
 import { messages as chatMessages } from "@/lib/chat/messages";
 import { trpc } from "@/trpc/client/client";
-import { Chat, ChatMessage, ChatMessageRole, ChatStatus } from "@/types/chat";
+import {
+  Chat,
+  ChatMessage,
+  ChatMessageRole,
+  ChatMessageType,
+  ChatStatus,
+} from "@/types/chat";
 import {
   Message,
   MessageContent,
   MessageResponse,
 } from "../ai-elements/message";
 import { ChatComposer } from "./chat-composer";
-import { ChatCsvColumnMapper } from "./chat-csv-column-mapper";
 import {
-  ChatCsvDropzone,
   ChatCsvFileAttachment,
   type ChatSelectedCsvFile,
 } from "./chat-csv-dropzone";
+import { ChatMessageRenderer } from "./chat-message-renderer";
 import { ColumnMapping, REQUIRED_FIELDS } from "./constants";
 import { createEmptyMapping, parseCsv, suggestMapping } from "./csv-utils";
-import { cn } from "@/lib/utils";
 
 type Props = {
   chat: Chat;
@@ -53,6 +51,8 @@ type StreamEvent =
     }
   | {
       type: "done";
+      messageType: ChatMessageType;
+      metadata: Record<string, unknown>;
       nextStatus?: ChatStatus;
     };
 
@@ -128,11 +128,9 @@ export default function AgentConversation({ chat }: Props) {
     persistedMessages.some(
       (message) =>
         message.role === ChatMessageRole.User &&
-        message.files?.some(
-          (file) =>
-            file.name === selectedCsvFile.name &&
-            file.size === selectedCsvFile.size
-        )
+        message.type === ChatMessageType.CsvFile &&
+        message.metadata.fileName === selectedCsvFile.name &&
+        message.metadata.fileSize === selectedCsvFile.size
     )
   );
   const hasPersistedOptimisticUserText = Boolean(
@@ -168,30 +166,49 @@ export default function AgentConversation({ chat }: Props) {
     : isWaitingForComment
       ? "Voeg opmerkingen toe"
       : "Antwoorden";
-  const messages = persistedMessages;
-
-  const appendLocalMessage = useCallback(
-    (message: {
-      id: string;
-      chatId: string;
-      role: ChatMessageRole;
-      content: string | null;
-      files?: { id: string; messageId: string; name: string; size: number }[];
-    }) => {
-      setLocalMessageState((currentState) => ({
-        chatId: message.chatId,
-        messages:
-          currentState.chatId === message.chatId
-            ? [...currentState.messages, message]
-            : [message],
-      }));
-    },
-    []
+  const messages = deriveAnsweredRequestMessages(
+    persistedMessages,
+    currentStatus
   );
+  const hasOpenCsvUploadRequest = messages.some(
+    (message) =>
+      message.type === ChatMessageType.CsvUploadRequest &&
+      message.metadata.answered !== true
+  );
+  const hasOpenCsvColumnMappingRequest = messages.some(
+    (message) =>
+      message.type === ChatMessageType.CsvColumnMappingRequest &&
+      message.metadata.answered !== true
+  );
+  const hasOpenCommentRequest = messages.some(
+    (message) =>
+      message.type === ChatMessageType.CommentRequest &&
+      message.metadata.answered !== true
+  );
+  const isPending =
+    updateChatStatus.isPending ||
+    reuploadCsv.isPending ||
+    saveMappedCsv.isPending ||
+    uploadCsvMetadata.isPending ||
+    saveVacancy.isPending ||
+    saveComment.isPending ||
+    confirmComment.isPending;
+
+  const appendLocalMessage = useCallback((message: ChatMessage) => {
+    setLocalMessageState((currentState) => ({
+      chatId: message.chatId,
+      messages:
+        currentState.chatId === message.chatId
+          ? [...currentState.messages, message]
+          : [message],
+    }));
+  }, []);
 
   const streamAssistantMessage = useCallback(async () => {
     const abortController = new AbortController();
     let fullContent = "";
+    let messageType = ChatMessageType.Text;
+    let metadata: Record<string, unknown> = {};
     setStreamedAssistantMessage({
       chatId: chat.id,
       content: "",
@@ -259,10 +276,18 @@ export default function AgentConversation({ chat }: Props) {
         }
 
         if (event.type === "done" && event.nextStatus) {
+          messageType = event.messageType;
+          metadata = event.metadata;
           setOptimisticStatus({
             chatId: chat.id,
             status: event.nextStatus,
           });
+          return;
+        }
+
+        if (event.type === "done") {
+          messageType = event.messageType;
+          metadata = event.metadata;
         }
       };
 
@@ -296,11 +321,15 @@ export default function AgentConversation({ chat }: Props) {
         appendStreamedAssistantMessage(remainingChunk);
       }
       appendLocalMessage({
-        id: createLocalMessageKey(),
-        chatId: chat.id,
-        role: ChatMessageRole.Assistant,
-        content: fullContent,
-        files: [],
+        ...mapDbMessageToChatMessage({
+          id: createLocalMessageKey(),
+          chat_id: chat.id,
+          role: ChatMessageRole.Assistant,
+          type: messageType,
+          content: fullContent,
+          created_at: new Date().toISOString(),
+          meta_data: metadata,
+        }),
       });
 
       void utils.chat.listRecent.invalidate();
@@ -577,7 +606,10 @@ export default function AgentConversation({ chat }: Props) {
     }
   };
 
-  const handleCommentChoice = async (wantsComment: boolean) => {
+  const handleCommentChoice = async (
+    wantsComment: boolean,
+    messageId?: string
+  ) => {
     const nextStatus = wantsComment
       ? ChatStatus.WaitingForComment
       : ChatStatus.ReadyToClassify;
@@ -591,6 +623,7 @@ export default function AgentConversation({ chat }: Props) {
       const savedMessage = await confirmComment.mutateAsync({
         chatId: chat.id,
         wantsComment,
+        ...(messageId && !messageId.startsWith("local-") ? { messageId } : {}),
       });
       appendLocalMessage(savedMessage);
       setOptimisticUserTextState(null);
@@ -614,30 +647,19 @@ export default function AgentConversation({ chat }: Props) {
       <Conversation className="min-h-0 flex-1">
         <ConversationContent>
           {messages.map((message) => (
-            <Message key={message.id} from={message.role}>
-              {message.content && (
-                <MessageContent>
-                  {message.id === `chat-stream-message-${chat.id}` ? (
-                    <MessageResponse isAnimating>
-                      {message.content}
-                    </MessageResponse>
-                  ) : (
-                    <MessageResponse>{message.content}</MessageResponse>
-                  )}
-                </MessageContent>
-              )}
-
-              {message.files?.map((file) => (
-                <ChatCsvFileAttachment
-                  key={file.id}
-                  className={cn(
-                    "mt-2",
-                    message.role === ChatMessageRole.User && "ml-auto"
-                  )}
-                  file={file}
-                />
-              ))}
-            </Message>
+            <ChatMessageRenderer
+              key={message.id}
+              message={message}
+              columns={csvColumns}
+              mapping={columnMapping}
+              isPending={isPending}
+              handlers={{
+                onCsvSelected: handleCsvSelected,
+                onColumnMappingChange: handleColumnMappingChange,
+                onReuploadCsv: handleReuploadCsv,
+                onCommentChoice: handleCommentChoice,
+              }}
+            />
           ))}
 
           {selectedCsvFile && !hasPersistedSelectedCsvFile ? (
@@ -679,71 +701,75 @@ export default function AgentConversation({ chat }: Props) {
           ) : null}
 
           {isWaitingForCsvInput && !hasPendingStreamMessage ? (
-            <Message from={ChatMessageRole.Assistant}>
-              <ChatCsvDropzone
-                isUploading={
-                  updateChatStatus.isPending ||
-                  uploadCsvMetadata.isPending ||
-                  saveMappedCsv.isPending ||
-                  reuploadCsv.isPending
-                }
-                onCsvSelectedAction={handleCsvSelected}
+            !hasOpenCsvUploadRequest ? (
+              <ChatMessageRenderer
+                message={createLocalRequestMessage({
+                  id: `local-${chat.id}-csv-upload-request`,
+                  chatId: chat.id,
+                  type: ChatMessageType.CsvUploadRequest,
+                  content: chatMessages.chatInitialized,
+                  metadata: { answered: false },
+                })}
+                columns={csvColumns}
+                mapping={columnMapping}
+                isPending={isPending}
+                handlers={{
+                  onCsvSelected: handleCsvSelected,
+                  onColumnMappingChange: handleColumnMappingChange,
+                  onReuploadCsv: handleReuploadCsv,
+                  onCommentChoice: handleCommentChoice,
+                }}
               />
-            </Message>
+            ) : null
           ) : null}
 
           {isNeedsCsvColumnMapping && !hasPendingStreamMessage ? (
-            <Message from={ChatMessageRole.Assistant}>
-              <MessageContent>
-                <ChatCsvColumnMapper
-                  columns={csvColumns}
-                  disabled={updateChatStatus.isPending || reuploadCsv.isPending}
-                  mapping={columnMapping}
-                  onChangeAction={(nextMapping) => {
-                    void handleColumnMappingChange(nextMapping);
-                  }}
-                  onReuploadAction={() => {
-                    void handleReuploadCsv();
-                  }}
-                />
-              </MessageContent>
-            </Message>
+            !hasOpenCsvColumnMappingRequest ? (
+              <ChatMessageRenderer
+                message={createLocalRequestMessage({
+                  id: `local-${chat.id}-csv-column-mapping-request`,
+                  chatId: chat.id,
+                  type: ChatMessageType.CsvColumnMappingRequest,
+                  content: chatMessages.csvNeedsColumnMapping,
+                  metadata: {
+                    answered: false,
+                    importId: chat.id,
+                  },
+                })}
+                columns={csvColumns}
+                mapping={columnMapping}
+                isPending={isPending}
+                handlers={{
+                  onCsvSelected: handleCsvSelected,
+                  onColumnMappingChange: handleColumnMappingChange,
+                  onReuploadCsv: handleReuploadCsv,
+                  onCommentChoice: handleCommentChoice,
+                }}
+              />
+            ) : null
           ) : null}
 
           {isCommentRequest && !hasPendingStreamMessage ? (
-            <Message from={ChatMessageRole.Assistant}>
-              <MessageContent className="w-full max-w-xl">
-                <Confirmation
-                  approval={{ id: `${chat.id}-comment-request` }}
-                  state="approval-requested"
-                >
-                  <ConfirmationTitle>
-                    <ConfirmationRequest>
-                      Wil je nog opmerkingen toevoegen?
-                    </ConfirmationRequest>
-                  </ConfirmationTitle>
-                  <ConfirmationActions>
-                    <ConfirmationAction
-                      disabled={updateChatStatus.isPending}
-                      onClick={() => {
-                        void handleCommentChoice(false);
-                      }}
-                      variant="outline"
-                    >
-                      Nee
-                    </ConfirmationAction>
-                    <ConfirmationAction
-                      disabled={updateChatStatus.isPending}
-                      onClick={() => {
-                        void handleCommentChoice(true);
-                      }}
-                    >
-                      Ja
-                    </ConfirmationAction>
-                  </ConfirmationActions>
-                </Confirmation>
-              </MessageContent>
-            </Message>
+            !hasOpenCommentRequest ? (
+              <ChatMessageRenderer
+                message={createLocalRequestMessage({
+                  id: `local-${chat.id}-comment-request`,
+                  chatId: chat.id,
+                  type: ChatMessageType.CommentRequest,
+                  content: chatMessages.commentRequest,
+                  metadata: { answered: false },
+                })}
+                columns={csvColumns}
+                mapping={columnMapping}
+                isPending={isPending}
+                handlers={{
+                  onCsvSelected: handleCsvSelected,
+                  onColumnMappingChange: handleColumnMappingChange,
+                  onReuploadCsv: handleReuploadCsv,
+                  onCommentChoice: handleCommentChoice,
+                }}
+              />
+            ) : null
           ) : null}
         </ConversationContent>
 
@@ -758,4 +784,83 @@ export default function AgentConversation({ chat }: Props) {
       </div>
     </div>
   );
+}
+
+function deriveAnsweredRequestMessages(
+  messages: ChatMessage[],
+  currentStatus: ChatStatus
+): ChatMessage[] {
+  return messages.map((message) => {
+    if (
+      message.type === ChatMessageType.CsvUploadRequest &&
+      currentStatus !== ChatStatus.Initialized &&
+      currentStatus !== ChatStatus.WaitingForCsvInput &&
+      message.metadata.answered !== true
+    ) {
+      return {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          answered: true,
+        },
+      };
+    }
+
+    if (
+      message.type === ChatMessageType.CsvColumnMappingRequest &&
+      currentStatus !== ChatStatus.NeedsCsvColumnMapping &&
+      message.metadata.answered !== true
+    ) {
+      return {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          answered: true,
+        },
+      };
+    }
+
+    if (
+      message.type === ChatMessageType.CommentRequest &&
+      currentStatus !== ChatStatus.CommentRequest &&
+      message.metadata.answered !== true
+    ) {
+      return {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          answered: true,
+        },
+      };
+    }
+
+    return message;
+  });
+}
+
+function createLocalRequestMessage({
+  id,
+  chatId,
+  type,
+  content,
+  metadata,
+}: {
+  id: string;
+  chatId: string;
+  type:
+    | ChatMessageType.CsvUploadRequest
+    | ChatMessageType.CsvColumnMappingRequest
+    | ChatMessageType.CommentRequest;
+  content: string;
+  metadata: Record<string, unknown>;
+}): ChatMessage {
+  return mapDbMessageToChatMessage({
+    id,
+    chat_id: chatId,
+    role: ChatMessageRole.Assistant,
+    type,
+    content,
+    created_at: new Date().toISOString(),
+    meta_data: metadata,
+  });
 }

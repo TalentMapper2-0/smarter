@@ -1,9 +1,31 @@
 import { Context } from "@/trpc/server/init";
 import { CandidateCreate } from "@/types/candidate";
-import { Chat, ChatMessage, ChatMessageRole, ChatStatus } from "@/types/chat";
+import {
+  Chat,
+  ChatMessage,
+  ChatMessageRole,
+  ChatMessageType,
+  ChatStatus,
+} from "@/types/chat";
+import {
+  DbMessageRow,
+  mapChatMessageToDbInsert,
+  mapDbMessageToChatMessage,
+} from "@/lib/chat/message-mappers";
 
-const chatSelect =
-  "id, title, userId:user_id, status, createdAt:created_at, messages (id, role, chatId:chat_id, content, createdAt:created_at, files:message_files (id, messageId:message_id, name, size))";
+const messageSelect = "id, chat_id, role, type, content, created_at, meta_data";
+const chatSelect = `id, title, userId:user_id, status, createdAt:created_at, messages (${messageSelect})`;
+
+type DbChatRow = Omit<Chat, "messages"> & {
+  messages: DbMessageRow[] | null;
+};
+
+function mapDbChatToChat(row: DbChatRow): Chat {
+  return {
+    ...row,
+    messages: (row.messages ?? []).map(mapDbMessageToChatMessage),
+  };
+}
 
 export default class ChatsRepository {
   static async create(ctx: Context, title: string): Promise<Chat> {
@@ -46,7 +68,7 @@ export default class ChatsRepository {
       throw error;
     }
 
-    return data;
+    return mapDbChatToChat(data as DbChatRow);
   }
 
   static async createMessageAndUpdateStatus(
@@ -56,12 +78,16 @@ export default class ChatsRepository {
       userId,
       content,
       role,
+      type = ChatMessageType.Text,
+      metadata = {},
       nextStatus,
     }: {
       chatId: string;
       userId: string;
       content: string;
       role: ChatMessageRole;
+      type?: ChatMessageType;
+      metadata?: Record<string, unknown>;
       nextStatus?: ChatStatus;
     }
   ): Promise<ChatMessage | null> {
@@ -98,19 +124,23 @@ export default class ChatsRepository {
 
     const { data: message, error: messageError } = await supabase
       .from("messages")
-      .insert({
-        chat_id: chatId,
-        role,
-        content,
-      })
-      .select("id, role, chatId:chat_id, content, createdAt:created_at")
+      .insert(
+        mapChatMessageToDbInsert({
+          chatId,
+          role,
+          type,
+          content,
+          metadata,
+        })
+      )
+      .select(messageSelect)
       .single();
 
     if (messageError) {
       throw messageError;
     }
 
-    return message;
+    return mapDbMessageToChatMessage(message as DbMessageRow);
   }
 
   static async addMessage(
@@ -120,16 +150,15 @@ export default class ChatsRepository {
       userId,
       content,
       role,
-      file,
+      type = ChatMessageType.Text,
+      metadata = {},
     }: {
       chatId: string;
       userId: string;
       content: string | null;
       role: ChatMessageRole;
-      file?: {
-        name: string;
-        size: number;
-      };
+      type?: ChatMessageType;
+      metadata?: Record<string, unknown>;
     }
   ): Promise<ChatMessage> {
     const { supabase } = ctx;
@@ -151,44 +180,132 @@ export default class ChatsRepository {
 
     const { data: message, error: messageError } = await supabase
       .from("messages")
-      .insert({
-        chat_id: chatId,
-        role,
-        content,
-      })
-      .select("id, role, chatId:chat_id, content, createdAt:created_at")
+      .insert(
+        mapChatMessageToDbInsert({
+          chatId,
+          role,
+          type,
+          content,
+          metadata,
+        })
+      )
+      .select(messageSelect)
       .single();
 
     if (messageError) {
       throw messageError;
     }
 
-    if (file) {
-      const { data: messageFile, error: fileError } = await supabase
-        .from("message_files")
-        .insert({
-          message_id: message.id,
-          name: file.name,
-          size: file.size,
-        })
-        .select("id, messageId:message_id, name, size")
-        .single();
+    return mapDbMessageToChatMessage(message as DbMessageRow);
+  }
 
-      if (fileError) {
-        throw fileError;
-      }
+  static async updateMessageMetadata(
+    ctx: Context,
+    {
+      chatId,
+      userId,
+      messageId,
+      type,
+      metadata,
+    }: {
+      chatId: string;
+      userId: string;
+      messageId: string;
+      type: ChatMessageType;
+      metadata: Record<string, unknown>;
+    }
+  ): Promise<ChatMessage | null> {
+    const { supabase } = ctx;
 
-      if (!messageFile) {
-        throw new Error("Message file was not created");
-      }
+    const { data: chat, error: chatError } = await supabase
+      .from("chats")
+      .select("id")
+      .eq("id", chatId)
+      .eq("user_id", userId)
+      .maybeSingle();
 
-      return {
-        ...message,
-        files: [messageFile],
-      };
+    if (chatError) {
+      throw chatError;
     }
 
-    return message;
+    if (!chat) {
+      return null;
+    }
+
+    const { data: message, error } = await supabase
+      .from("messages")
+      .update({
+        meta_data: metadata,
+      })
+      .eq("id", messageId)
+      .eq("chat_id", chatId)
+      .eq("type", type)
+      .select(messageSelect)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return message ? mapDbMessageToChatMessage(message as DbMessageRow) : null;
+  }
+
+  static async updateLatestMessageMetadataByType(
+    ctx: Context,
+    {
+      chatId,
+      userId,
+      type,
+      metadata,
+    }: {
+      chatId: string;
+      userId: string;
+      type: ChatMessageType;
+      metadata: Record<string, unknown>;
+    }
+  ): Promise<ChatMessage | null> {
+    const { supabase } = ctx;
+
+    const { data: chat, error: chatError } = await supabase
+      .from("chats")
+      .select("id")
+      .eq("id", chatId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (chatError) {
+      throw chatError;
+    }
+
+    if (!chat) {
+      return null;
+    }
+
+    const { data: messages, error: findError } = await supabase
+      .from("messages")
+      .select(messageSelect)
+      .eq("chat_id", chatId)
+      .eq("type", type)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (findError) {
+      throw findError;
+    }
+
+    const message = messages?.[0] as DbMessageRow | undefined;
+
+    if (!message) {
+      return null;
+    }
+
+    return ChatsRepository.updateMessageMetadata(ctx, {
+      chatId,
+      userId,
+      messageId: message.id,
+      type,
+      metadata,
+    });
   }
 
   static async saveChatCandidates(
@@ -298,7 +415,7 @@ export default class ChatsRepository {
       throw error;
     }
 
-    return data;
+    return data ? mapDbChatToChat(data as DbChatRow) : null;
   }
 
   static async updateStatusForUser(
@@ -330,7 +447,7 @@ export default class ChatsRepository {
       throw error;
     }
 
-    return data;
+    return data ? mapDbChatToChat(data as DbChatRow) : null;
   }
 
   static async listRecentForUser(
@@ -351,6 +468,6 @@ export default class ChatsRepository {
       throw error;
     }
 
-    return data;
+    return (data ?? []).map((chat) => mapDbChatToChat(chat as DbChatRow));
   }
 }

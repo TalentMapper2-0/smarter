@@ -1,4 +1,10 @@
-import { Confirmation, ConfirmationTitle, ConfirmationRequest, ConfirmationActions, ConfirmationAction } from "@/components/ai-elements/confirmation";
+import {
+  Confirmation,
+  ConfirmationTitle,
+  ConfirmationRequest,
+  ConfirmationActions,
+  ConfirmationAction,
+} from "@/components/ai-elements/confirmation";
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { ChatMessage, ChatMessageType, ChatMessageRole } from "@/types/chat";
 
@@ -19,7 +25,7 @@ export default function CommentRequestMessage({
       <MessageContent className="w-full max-w-xl">
         <Confirmation
           approval={{ id: `${message.id}-comment-request` }}
-          state={answered ? "approval-responded" : "approval-requested"}
+          state="approval-requested"
         >
           <ConfirmationTitle>
             <ConfirmationRequest>
@@ -33,7 +39,7 @@ export default function CommentRequestMessage({
               onClick={() => {
                 void onCommentChoice(false);
               }}
-              variant={answered && answer === false ? "default" : "outline"}
+              variant={"outline"}
             >
               Nee
             </ConfirmationAction>
@@ -43,7 +49,7 @@ export default function CommentRequestMessage({
               onClick={() => {
                 void onCommentChoice(true);
               }}
-              variant={answered && answer === true ? "default" : "outline"}
+              variant={"outline"}
             >
               Ja
             </ConfirmationAction>

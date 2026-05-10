@@ -1,4 +1,8 @@
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
 import { ChatMessage, ChatMessageRole, ChatMessageType } from "@/types/chat";
 import { ChatCsvDropzone } from "../chat-csv-dropzone";
 

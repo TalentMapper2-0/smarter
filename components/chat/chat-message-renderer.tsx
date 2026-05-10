@@ -3,17 +3,19 @@
 import type { ChatMessage } from "@/types/chat";
 import { ChatMessageType } from "@/types/chat";
 import type { ColumnMapping } from "./constants";
-import TextMessage from "./messages/text-message";
-import CsvUploadMessage from "./messages/csv-upload-message";
-import CsvFileMessage from "./messages/csv-file-message";
-import CsvColumnMappingRequest from "./messages/csv-column-mapping-request";
-import CommentRequestMessage from "./messages/comment-request-message";
 import ClassificationResultMessage from "./messages/classification-result-message";
+import CommentRequestMessage from "./messages/comment-request-message";
+import CsvColumnMappingRequestMessage from "./messages/csv-column-mapping-request-message";
+import CsvFileMessage from "./messages/csv-file-message";
+import CsvUploadMessage from "./messages/csv-upload-message";
 import ErrorChatMessage from "./messages/error-message";
+import TextMessage from "./messages/text-message";
 import UnsupportedChatMessage from "./messages/unsupported-chat-message";
 
 type ChatMessageRendererProps = {
   message: ChatMessage;
+  columns?: string[];
+  mapping?: ColumnMapping;
   handlers: {
     onCsvSelected: (file: File) => void | Promise<void>;
     onColumnMappingChange: (mapping: ColumnMapping) => void | Promise<void>;
@@ -28,6 +30,8 @@ type ChatMessageRendererProps = {
 
 export function ChatMessageRenderer({
   message,
+  columns,
+  mapping,
   handlers,
   isPending = false,
 }: ChatMessageRendererProps) {
@@ -48,16 +52,19 @@ export function ChatMessageRenderer({
       return <CsvFileMessage message={message} />;
 
     case ChatMessageType.CsvColumnMappingRequest:
+      if (!mapping) {
+        return <UnsupportedChatMessage message={message} />;
+      }
+
       return (
-        <div>
-          Not implemented yet.
-        </div>
-        // <CsvColumnMappingRequest
-        //   message={message}
-        //   isPending={isPending}
-        //   onColumnMappingChange={handlers.onColumnMappingChange}
-        //   onReuploadCsv={handlers.onReuploadCsv}
-        // />
+        <CsvColumnMappingRequestMessage
+          message={message}
+          columns={columns ?? []}
+          mapping={mapping}
+          isPending={isPending}
+          onColumnMappingChange={handlers.onColumnMappingChange}
+          onReuploadCsv={handlers.onReuploadCsv}
+        />
       );
 
     case ChatMessageType.CommentRequest:

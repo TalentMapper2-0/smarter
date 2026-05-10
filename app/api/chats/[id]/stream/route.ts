@@ -93,6 +93,8 @@ export async function POST(request: Request, { params }: RouteContext) {
               chatId: parsedChatId.data,
               content: plan.message.content,
               role: plan.message.role,
+              type: plan.message.type,
+              metadata: plan.message.metadata,
               nextStatus: plan.nextStatus,
             });
 
@@ -100,6 +102,8 @@ export async function POST(request: Request, { params }: RouteContext) {
               encoder.encode(
                 JSON.stringify({
                   type: "done",
+                  messageType: plan.message.type,
+                  metadata: plan.message.metadata,
                   nextStatus: plan.nextStatus,
                 }) + "\n"
               )

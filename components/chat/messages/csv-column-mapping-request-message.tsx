@@ -1,9 +1,13 @@
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
 import { ChatMessage, ChatMessageRole, ChatMessageType } from "@/types/chat";
 import { ChatCsvColumnMapper } from "../chat-csv-column-mapper";
 import { ColumnMapping } from "../constants";
 
-export default function CsvColumnMappingRequest({
+export default function CsvColumnMappingRequestMessage({
   message,
   isPending,
   columns,
@@ -27,9 +31,7 @@ export default function CsvColumnMappingRequest({
     return (
       <Message from={ChatMessageRole.Assistant}>
         <MessageContent>
-          <MessageResponse>
-            {message.content ?? "Kolommen zijn gekoppeld."}
-          </MessageResponse>
+          <MessageResponse>De kolommen zijn al gekoppeld.</MessageResponse>
         </MessageContent>
       </Message>
     );
@@ -46,8 +48,8 @@ export default function CsvColumnMappingRequest({
       <MessageContent>
         <ChatCsvColumnMapper
           columns={columns}
-          mapping={mapping}
           disabled={isPending}
+          mapping={mapping}
           onChangeAction={(nextMapping) => {
             void onColumnMappingChange(nextMapping);
           }}

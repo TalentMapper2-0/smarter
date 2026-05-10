@@ -181,6 +181,7 @@ export const chatsRouter = router({
       z.object({
         chatId: z.string().uuid(),
         wantsComment: z.boolean(),
+        messageId: z.string().uuid().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -192,7 +193,9 @@ export const chatsRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:
-            error instanceof Error ? error.message : "Failed to confirm comment",
+            error instanceof Error
+              ? error.message
+              : "Failed to confirm comment",
           cause: error,
         });
       }

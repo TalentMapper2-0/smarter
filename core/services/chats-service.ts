@@ -1,7 +1,14 @@
 import { Context } from "@/trpc/server/init";
 import ChatsRepository from "../repositories/chats-repository";
-import { Chat, ChatMessage, ChatStatus, ChatMessageRole } from "@/types/chat";
+import {
+  Chat,
+  ChatMessage,
+  ChatStatus,
+  ChatMessageRole,
+  ChatMessageType,
+} from "@/types/chat";
 import { CandidateCreate } from "@/types/candidate";
+import { messages as chatMessages } from "@/lib/chat/messages";
 import { getNextStatusAfterInput } from "@/lib/chat/workflow";
 
 export default class ChatsService {
@@ -58,8 +65,6 @@ export default class ChatsService {
     ctx: Context,
     {
       chatId,
-      fileName,
-      fileSize,
     }: {
       chatId: string;
       fileName: string;
@@ -70,17 +75,14 @@ export default class ChatsService {
       throw new Error("Not authenticated");
     }
 
-    void fileName;
-    void fileSize;
-
     return ChatsRepository.addMessage(ctx, {
       chatId,
       userId: ctx.user.id,
-      content: null,
-      role: ChatMessageRole.User,
-      file: {
-        name: fileName,
-        size: fileSize,
+      content: chatMessages.chatInitialized,
+      role: ChatMessageRole.Assistant,
+      type: ChatMessageType.CsvUploadRequest,
+      metadata: {
+        answered: false,
       },
     });
   }
@@ -101,14 +103,24 @@ export default class ChatsService {
       throw new Error("Not authenticated");
     }
 
+    await ChatsRepository.updateLatestMessageMetadataByType(ctx, {
+      chatId,
+      userId: ctx.user.id,
+      type: ChatMessageType.CsvUploadRequest,
+      metadata: {
+        answered: true,
+      },
+    });
+
     return ChatsRepository.addMessage(ctx, {
       chatId,
       userId: ctx.user.id,
       role: ChatMessageRole.User,
       content: null,
-      file: {
-        name: fileName,
-        size: fileSize,
+      type: ChatMessageType.CsvFile,
+      metadata: {
+        fileName,
+        fileSize,
       },
     });
   }
@@ -132,6 +144,16 @@ export default class ChatsService {
       chatId,
       userId: ctx.user.id,
       candidates: mappedRows,
+    });
+
+    await ChatsRepository.updateLatestMessageMetadataByType(ctx, {
+      chatId,
+      userId: ctx.user.id,
+      type: ChatMessageType.CsvColumnMappingRequest,
+      metadata: {
+        answered: true,
+        importId: chatId,
+      },
     });
 
     await ChatsRepository.updateStatusForUser(ctx, {
@@ -222,9 +244,11 @@ export default class ChatsService {
     {
       chatId,
       wantsComment,
+      messageId,
     }: {
       chatId: string;
       wantsComment: boolean;
+      messageId?: string;
     }
   ): Promise<ChatMessage> {
     if (!ctx.user) {
@@ -234,6 +258,30 @@ export default class ChatsService {
     const nextStatus = wantsComment
       ? ChatStatus.WaitingForComment
       : ChatStatus.ReadyToClassify;
+
+    const answeredMetadata = {
+      answered: true,
+      answer: wantsComment,
+    };
+
+    const updatedRequest = messageId
+      ? await ChatsRepository.updateMessageMetadata(ctx, {
+          chatId,
+          userId: ctx.user.id,
+          messageId,
+          type: ChatMessageType.CommentRequest,
+          metadata: answeredMetadata,
+        })
+      : null;
+
+    if (!updatedRequest) {
+      await ChatsRepository.updateLatestMessageMetadataByType(ctx, {
+        chatId,
+        userId: ctx.user.id,
+        type: ChatMessageType.CommentRequest,
+        metadata: answeredMetadata,
+      });
+    }
 
     const message = await ChatsRepository.addMessage(ctx, {
       chatId,

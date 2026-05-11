@@ -18,7 +18,6 @@ export default function CommentRequestMessage({
   onCommentChoice: (wantsComment: boolean) => void | Promise<void>;
 }) {
   const answered = message.metadata.answered === true;
-  const answer = message.metadata.answer;
 
   return (
     <Message from={ChatMessageRole.Assistant}>

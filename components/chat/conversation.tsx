@@ -34,6 +34,7 @@ import {
   type ChatSelectedCsvFile,
 } from "./chat-csv-dropzone";
 import { ChatMessageRenderer } from "./chat-message-renderer";
+import { ClassificationResultsTable } from "./classification-results-table";
 import { ColumnMapping, REQUIRED_FIELDS } from "./constants";
 import { createEmptyMapping, parseCsv, suggestMapping } from "./csv-utils";
 
@@ -203,6 +204,16 @@ export default function AgentConversation({ chat }: Props) {
           : [message],
     }));
   }, []);
+
+  const handleClassificationStatusChange = useCallback(
+    (status: ChatStatus) => {
+      setOptimisticStatus({
+        chatId: chat.id,
+        status,
+      });
+    },
+    [chat.id]
+  );
 
   const streamAssistantMessage = useCallback(async () => {
     const abortController = new AbortController();
@@ -700,6 +711,14 @@ export default function AgentConversation({ chat }: Props) {
             </Message>
           ) : null}
 
+          {isClassificationTableStatus(currentStatus) ? (
+            <ClassificationResultsTable
+              chatId={chat.id}
+              status={currentStatus}
+              onStatusChangeAction={handleClassificationStatusChange}
+            />
+          ) : null}
+
           {isWaitingForCsvInput && !hasPendingStreamMessage ? (
             !hasOpenCsvUploadRequest ? (
               <ChatMessageRenderer
@@ -783,6 +802,15 @@ export default function AgentConversation({ chat }: Props) {
         />
       </div>
     </div>
+  );
+}
+
+function isClassificationTableStatus(status: ChatStatus) {
+  return (
+    status === ChatStatus.ReadyToClassify ||
+    status === ChatStatus.ClassifyingCandidates ||
+    status === ChatStatus.ClassificationComplete ||
+    status === ChatStatus.ClassificationFailed
   );
 }
 

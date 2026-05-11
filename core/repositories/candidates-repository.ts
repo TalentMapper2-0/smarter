@@ -1,5 +1,6 @@
 import "server-only";
 import { Context } from "@/trpc/server/init";
+import type { CandidateClassificationRow } from "@/types/candidate";
 
 type UploadedCandidateRow = {
   linkedinUrl: string;
@@ -17,16 +18,6 @@ type CreateCandidatesInput = {
 
 export type CandidateClassificationResult = {
   linkedinUrl: string;
-  label: string;
-  explanation: string;
-  status: string;
-};
-
-export type CandidateClassificationRow = {
-  id: string;
-  linkedinUrl: string;
-  salesNavigatorId: string;
-  name: string;
   label: string;
   explanation: string;
   status: string;

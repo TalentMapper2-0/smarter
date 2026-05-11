@@ -1,6 +1,6 @@
-import "server-only";
 import { Context } from "@/trpc/server/init";
 import type { CandidateClassificationRow } from "@/types/candidate";
+import "server-only";
 
 type UploadedCandidateRow = {
   linkedinUrl: string;
@@ -58,7 +58,7 @@ export default class CandidatesRepository {
 
     const { data: candidateRows, error: candidateError } = await supabase
       .from("classify_candidates")
-      .select("linkedin_url,sales_navigator_id,name")
+      .select("linkedin_url,sales_navigator_id,first_name,last_name")
       .eq("chat_id", chatId);
 
     if (candidateError) {
@@ -73,13 +73,11 @@ export default class CandidatesRepository {
       vacancyText: vacancyRows?.[0]?.vacancy_text ?? "",
       commentText: commentRows?.[0]?.comment_text ?? "",
       rows: (candidateRows ?? []).map((row) => {
-        const [firstName = "", ...lastNameParts] = (row.name ?? "").split(" ");
-
         return {
           linkedinUrl: row.linkedin_url ?? "",
           salesNavigatorId: row.sales_navigator_id ?? "",
-          firstName,
-          lastName: lastNameParts.join(" "),
+          firstName: row.first_name ?? "",
+          lastName: row.last_name ?? "",
         };
       }),
     };
@@ -93,7 +91,8 @@ export default class CandidatesRepository {
     const candidateRows = rows.map((row) => ({
       linkedin_url: row.linkedinUrl,
       sales_navigator_id: row.salesNavigatorId,
-      name: [row.firstName, row.lastName].filter(Boolean).join(" ").trim(),
+      first_name: row.firstName,
+      last_name: row.lastName,
       chat_id: chatId,
     }));
 
@@ -166,7 +165,7 @@ export default class CandidatesRepository {
     const { data, error } = await supabase
       .from("classify_candidates")
       .select(
-        "id,linkedin_url,sales_navigator_id,name,label,explanation,status"
+        "id,linkedin_url,sales_navigator_id,first_name,last_name,label,explanation,status"
       )
       .eq("chat_id", chatId)
       .order("created_at", { ascending: true });
@@ -179,7 +178,8 @@ export default class CandidatesRepository {
       id: row.id,
       linkedinUrl: row.linkedin_url ?? "",
       salesNavigatorId: row.sales_navigator_id ?? "",
-      name: row.name ?? "",
+      firstName: row.first_name ?? "",
+      lastName: row.last_name ?? "",
       label: row.label ?? "",
       explanation: row.explanation ?? "",
       status: row.status ?? "",

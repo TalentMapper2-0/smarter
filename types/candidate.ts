@@ -1,7 +1,8 @@
 export type Candidate = {
   id: string;
   linkedInUrl: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   explanation: string;
   label: string;
   salesNavigatorId: string;
@@ -19,7 +20,8 @@ export type CandidateClassificationRow = {
   id: string;
   linkedinUrl: string;
   salesNavigatorId: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   label: string;
   explanation: string;
   status: string;

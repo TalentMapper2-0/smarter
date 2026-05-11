@@ -325,7 +325,8 @@ export default class ChatsRepository {
       chat_id: chatId,
       linkedin_url: row.linkedinUrl,
       sales_navigator_id: row.salesNavigatorId ?? null,
-      name: [row.firstName, row.lastName].filter(Boolean).join(" ").trim(),
+      first_name: row.firstName,
+      last_name: row.lastName,
     }));
 
     const { error } = await supabase.from("classify_candidates").insert(rows);

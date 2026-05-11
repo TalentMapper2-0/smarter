@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDownIcon,
+  ArrowUpDownIcon,
+  ArrowUpIcon,
   CheckCircle2Icon,
-  PlayIcon,
-  RefreshCwIcon,
+  DownloadIcon,
   XCircleIcon,
 } from "lucide-react";
+import { useStickToBottomContext } from "use-stick-to-bottom";
 
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Badge } from "@/components/ui/badge";
@@ -37,10 +40,23 @@ type CandidateClassificationDbRow = {
   chat_id: string | null;
   linkedin_url: string | null;
   sales_navigator_id: string | null;
-  name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   label: string | null;
   explanation: string | null;
   status: string | null;
+};
+
+type SortKey = "name" | "status" | "label" | "explanation";
+
+type SortState = {
+  key: SortKey;
+  direction: "asc" | "desc";
+};
+
+const defaultSort: SortState = {
+  key: "name",
+  direction: "asc",
 };
 
 export function ClassificationResultsTable({
@@ -49,14 +65,31 @@ export function ClassificationResultsTable({
   onStatusChangeAction,
 }: ClassificationResultsTableProps) {
   const utils = trpc.useUtils();
+  const { scrollToBottom } = useStickToBottomContext();
+  const startedClassificationChatIdRef = useRef<string | null>(null);
 
+  const [sort, setSort] = useState<SortState>(defaultSort);
+  const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
   const [realtimeRowsByChatId, setRealtimeRowsByChatId] = useState<
     Record<string, Record<string, CandidateClassificationRow | null>>
   >({});
+  const [realtimeConnectedByChatId, setRealtimeConnectedByChatId] = useState<
+    Record<string, boolean>
+  >({});
 
-  const { data, isLoading } = trpc.candidates.listClassificationRows.useQuery({
-    chatId,
-  });
+  const isRealtimeConnected = realtimeConnectedByChatId[chatId] ?? false;
+
+  const shouldPollRows =
+    status === ChatStatus.ClassifyingCandidates && !isRealtimeConnected;
+
+  const { data, isLoading } = trpc.candidates.listClassificationRows.useQuery(
+    {
+      chatId,
+    },
+    {
+      refetchInterval: shouldPollRows ? 1500 : false,
+    }
+  );
 
   const classify = trpc.candidates.classify.useMutation({
     onSuccess: (result) => {
@@ -65,6 +98,23 @@ export function ClassificationResultsTable({
       void utils.chat.listRecent.invalidate();
     },
   });
+
+  useEffect(() => {
+    if (
+      status !== ChatStatus.ReadyToClassify ||
+      classify.isPending ||
+      !data?.length ||
+      startedClassificationChatIdRef.current === chatId
+    ) {
+      return;
+    }
+
+    startedClassificationChatIdRef.current = chatId;
+    void classify.mutateAsync({ chatId }).catch((error) => {
+      startedClassificationChatIdRef.current = null;
+      console.error("Failed to start classification", error);
+    });
+  }, [chatId, classify, data?.length, status]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -82,8 +132,9 @@ export function ClassificationResultsTable({
         (payload) => {
           if (payload.eventType === "DELETE") {
             const oldRow = payload.old as Partial<CandidateClassificationDbRow>;
+            const deletedRowId = oldRow.id;
 
-            if (!oldRow.id) {
+            if (!deletedRowId) {
               return;
             }
 
@@ -91,7 +142,7 @@ export function ClassificationResultsTable({
               ...current,
               [chatId]: {
                 ...(current[chatId] ?? {}),
-                [oldRow.id as string]: null,
+                [deletedRowId]: null,
               },
             }));
 
@@ -113,7 +164,12 @@ export function ClassificationResultsTable({
           }));
         }
       )
-      .subscribe();
+      .subscribe((subscriptionStatus) => {
+        setRealtimeConnectedByChatId((current) => ({
+          ...current,
+          [chatId]: subscriptionStatus === "SUBSCRIBED",
+        }));
+      });
 
     return () => {
       void supabase.removeChannel(channel);
@@ -136,8 +192,10 @@ export function ClassificationResultsTable({
     return Array.from(rowsById.values());
   }, [chatId, data, realtimeRowsByChatId]);
 
-  const classifiedRows = useMemo(
-    () => rows.filter((row) => isClassifiedStatus(row.status)),
+  const sortedRows = useMemo(() => sortRows(rows, sort), [rows, sort]);
+
+  const settledRows = useMemo(
+    () => rows.filter((row) => isSettledStatus(row.status)),
     [rows]
   );
 
@@ -147,24 +205,24 @@ export function ClassificationResultsTable({
   );
 
   const hasRunningRows = rows.some((row) => isRunningStatus(row.status));
-
-  const canStart =
-    status === ChatStatus.ReadyToClassify ||
-    status === ChatStatus.ClassificationFailed;
+  const hasOpenRows = rows.some((row) => !isSettledStatus(row.status));
 
   const isClassifying =
     status === ChatStatus.ClassifyingCandidates ||
     classify.isPending ||
     hasRunningRows;
 
-  const progressLabel = `${classifiedRows.length}/${rows.length}`;
+  const progressLabel = `${settledRows.length}/${rows.length}`;
+  const canDownloadCsv = Boolean(rows.length) && !isClassifying && !hasOpenRows;
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [isClassifying, rows.length, scrollToBottom, settledRows.length]);
 
   useEffect(() => {
     if (status !== ChatStatus.ClassifyingCandidates || !rows.length) {
       return;
     }
-
-    const hasOpenRows = rows.some((row) => !isSettledStatus(row.status));
 
     if (hasOpenRows) {
       return;
@@ -179,16 +237,48 @@ export function ClassificationResultsTable({
     void utils.chat.listRecent.invalidate();
   }, [
     failedRows.length,
+    hasOpenRows,
     onStatusChangeAction,
-    rows,
+    rows.length,
     status,
     utils.chat.listRecent,
   ]);
 
+  const handleSort = (key: SortKey) => {
+    setSort((currentSort) => {
+      if (currentSort.key !== key) {
+        return {
+          key,
+          direction: "asc",
+        };
+      }
+
+      return {
+        key,
+        direction: currentSort.direction === "asc" ? "desc" : "asc",
+      };
+    });
+  };
+
+  const handleDownloadCsv = async () => {
+    if (!canDownloadCsv || isDownloadingCsv) {
+      return;
+    }
+
+    setIsDownloadingCsv(true);
+
+    try {
+      await waitForNextPaint();
+      downloadCsv(rows, chatId);
+    } finally {
+      setIsDownloadingCsv(false);
+    }
+  };
+
   return (
     <Message from={ChatMessageRole.Assistant}>
       <MessageContent className="w-full">
-        <div className="flex w-full max-w-full flex-col gap-3 rounded-lg border bg-background">
+        <div className="flex w-full max-w-full flex-col gap-3 rounded-lg border bg-background max-h-150 overflow-hidden">
           <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-2">
               {isClassifying ? (
@@ -207,24 +297,19 @@ export function ClassificationResultsTable({
               </div>
             </div>
 
-            {canStart ? (
-              <Button
-                disabled={classify.isPending || isLoading || !rows.length}
-                onClick={() => {
-                  void classify.mutateAsync({ chatId });
-                }}
-                size="sm"
-              >
-                {status === ChatStatus.ClassificationFailed ? (
-                  <RefreshCwIcon data-icon="inline-start" />
-                ) : (
-                  <PlayIcon data-icon="inline-start" />
-                )}
-                {status === ChatStatus.ClassificationFailed
-                  ? "Opnieuw starten"
-                  : "Start classificatie"}
-              </Button>
-            ) : null}
+            <Button
+              disabled={!canDownloadCsv || isDownloadingCsv}
+              onClick={handleDownloadCsv}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              {isDownloadingCsv ? (
+                <Spinner className="size-4" />
+              ) : (
+                <DownloadIcon />
+              )}
+            </Button>
           </div>
 
           {isLoading ? (
@@ -237,20 +322,30 @@ export function ClassificationResultsTable({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Kandidaat</TableHead>
+                  <SortableTableHead
+                    activeSort={sort}
+                    label="Kandidaat"
+                    sortKey="name"
+                    onSortAction={handleSort}
+                  />
                   <TableHead>Status</TableHead>
-                  <TableHead>Label</TableHead>
+                  <SortableTableHead
+                    activeSort={sort}
+                    label="Label"
+                    sortKey="label"
+                    onSortAction={handleSort}
+                  />
                   <TableHead className="min-w-64">Uitleg</TableHead>
                 </TableRow>
               </TableHeader>
 
               <TableBody>
-                {rows.map((row) => (
+                {sortedRows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell>
                       <div className="min-w-36">
                         <p className="truncate font-medium">
-                          {row.name || "Onbekend"}
+                          {`${row.firstName} ${row.lastName}`.trim() || "Onbekend"}
                         </p>
                         <p className="truncate text-xs text-muted-foreground">
                           {row.linkedinUrl || row.salesNavigatorId || "-"}
@@ -263,15 +358,26 @@ export function ClassificationResultsTable({
                     </TableCell>
 
                     <TableCell>
-                      <span className="block max-w-36 truncate">
-                        {row.label || "-"}
-                      </span>
+                      {isRowLoading(row, isClassifying) ? (
+                        <Skeleton className="h-5 w-24" />
+                      ) : (
+                        <span className="block max-w-36 truncate">
+                          {row.label || "-"}
+                        </span>
+                      )}
                     </TableCell>
 
                     <TableCell className="max-w-96 whitespace-normal">
-                      <span className="line-clamp-3 text-muted-foreground">
-                        {row.explanation || "-"}
-                      </span>
+                      {isRowLoading(row, isClassifying) ? (
+                        <div className="flex flex-col gap-1">
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-4 w-3/4" />
+                        </div>
+                      ) : (
+                        <span className="line-clamp-3 text-muted-foreground">
+                          {row.explanation || "-"}
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -285,6 +391,42 @@ export function ClassificationResultsTable({
         </div>
       </MessageContent>
     </Message>
+  );
+}
+
+function SortableTableHead({
+  activeSort,
+  className,
+  label,
+  sortKey,
+  onSortAction,
+}: {
+  activeSort: SortState;
+  className?: string;
+  label: string;
+  sortKey: SortKey;
+  onSortAction: (key: SortKey) => void;
+}) {
+  const isActive = activeSort.key === sortKey;
+  const SortIcon = !isActive
+    ? ArrowUpDownIcon
+    : activeSort.direction === "asc"
+      ? ArrowUpIcon
+      : ArrowDownIcon;
+
+  return (
+    <TableHead className={className}>
+      <Button
+        className="-ml-2"
+        onClick={() => onSortAction(sortKey)}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >
+        {label}
+        <SortIcon data-icon="inline-end" />
+      </Button>
+    </TableHead>
   );
 }
 
@@ -311,7 +453,8 @@ function mapDbRowToClassificationRow(
     id: row.id,
     linkedinUrl: row.linkedin_url ?? "",
     salesNavigatorId: row.sales_navigator_id ?? "",
-    name: row.name ?? "",
+    firstName: row.first_name ?? "",
+    lastName: row.last_name ?? "",
     label: row.label ?? "",
     explanation: row.explanation ?? "",
     status: row.status ?? "",
@@ -332,4 +475,120 @@ function isClassifiedStatus(status: string) {
 
 function isSettledStatus(status: string) {
   return isClassifiedStatus(status) || isFailedStatus(status);
+}
+
+function isRowLoading(row: CandidateClassificationRow, isClassifying: boolean) {
+  return isClassifying && !isSettledStatus(row.status);
+}
+
+function sortRows(rows: CandidateClassificationRow[], sort: SortState) {
+  const direction = sort.direction === "asc" ? 1 : -1;
+
+  return [...rows].sort((left, right) => {
+    if (sort.key === "label") {
+      const labelComparison =
+        getLabelRank(left.label) - getLabelRank(right.label);
+
+      if (labelComparison !== 0) {
+        return labelComparison * direction;
+      }
+    }
+
+    const valueComparison = getSortValue(left, sort.key).localeCompare(
+      getSortValue(right, sort.key),
+      "nl",
+      { sensitivity: "base" }
+    );
+
+    if (valueComparison !== 0) {
+      return valueComparison * direction;
+    }
+
+    const leftName = `${left.firstName} ${left.lastName}`.trim();
+    const rightName = `${right.firstName} ${right.lastName}`.trim();
+
+    return leftName.localeCompare(rightName, "nl", { sensitivity: "base" });
+  });
+}
+
+function getSortValue(row: CandidateClassificationRow, key: SortKey) {
+  switch (key) {
+    case "label":
+      return row.label;
+    case "status":
+      return row.status;
+    case "explanation":
+      return row.explanation;
+    case "name":
+      return `${row.firstName} ${row.lastName}`.trim();
+  }
+}
+
+function getLabelRank(label: string) {
+  const normalizedLabel = label.trim().toLowerCase();
+
+  if (normalizedLabel === "fit") {
+    return 0;
+  }
+
+  if (normalizedLabel === "moderate") {
+    return 1;
+  }
+
+  if (
+    normalizedLabel === "not fit" ||
+    normalizedLabel === "not_fit" ||
+    normalizedLabel === "no fit"
+  ) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function downloadCsv(rows: CandidateClassificationRow[], chatId: string) {
+  const headers = [
+    "first_name",
+    "last_name",
+    "linkedin_url",
+    "sales_navigator_id",
+    "status",
+    "label",
+    "explanation",
+  ];
+
+  const csvRows = rows.map((row) => [
+    row.firstName,
+    row.lastName,
+    row.linkedinUrl,
+    row.salesNavigatorId,
+    row.status,
+    row.label,
+    row.explanation,
+  ]);
+
+  const csv = [headers, ...csvRows]
+    .map((row) => row.map(escapeCsvValue).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `classificatie-resultaten-${chatId}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeCsvValue(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function waitForNextPaint() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
 }

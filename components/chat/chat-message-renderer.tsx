@@ -3,7 +3,6 @@
 import type { ChatMessage } from "@/types/chat";
 import { ChatMessageType } from "@/types/chat";
 import type { ColumnMapping } from "./constants";
-import ClassificationResultMessage from "./messages/classification-result-message";
 import CommentRequestMessage from "./messages/comment-request-message";
 import CsvColumnMappingRequestMessage from "./messages/csv-column-mapping-request-message";
 import CsvFileMessage from "./messages/csv-file-message";
@@ -77,9 +76,6 @@ export function ChatMessageRenderer({
           }
         />
       );
-
-    case ChatMessageType.ClassificationResult:
-      return <ClassificationResultMessage message={message} />;
 
     case ChatMessageType.Error:
       return <ErrorChatMessage message={message} />;

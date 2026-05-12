@@ -374,7 +374,10 @@ function getNameSimilarity(left: string, right: string): number {
 }
 
 function getLevenshteinDistance(left: string, right: string): number {
-  const previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
+  const previousRow = Array.from(
+    { length: right.length + 1 },
+    (_, index) => index
+  );
 
   for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
     let previousDiagonal = previousRow[0];

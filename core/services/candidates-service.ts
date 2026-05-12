@@ -297,7 +297,7 @@ export default class CandidatesService {
     profilesList: string[],
     saveResult: (result: CandidateClassificationResult) => Promise<void>
   ): Promise<ClassificationStreamSummary> {
-    const savedResultFingerprintsByUrl = new Map<string, string>();
+    const savedResultFingerprintsByCandidateKey = new Map<string, string>();
     let savedUniqueResultsCount = 0;
     let failedResultsCount = 0;
 
@@ -321,22 +321,24 @@ export default class CandidatesService {
 
         const resultFingerprint =
           this.toClassificationResultFingerprint(result);
+        const resultCandidateKey = this.toClassificationResultCandidateKey(
+          result
+        );
 
         if (
-          savedResultFingerprintsByUrl.get(result.linkedinUrl) ===
+          savedResultFingerprintsByCandidateKey.get(resultCandidateKey) ===
           resultFingerprint
         ) {
           continue;
         }
 
-        const isFirstSaveForCandidate = !savedResultFingerprintsByUrl.has(
-          result.linkedinUrl
-        );
+        const isFirstSaveForCandidate =
+          !savedResultFingerprintsByCandidateKey.has(resultCandidateKey);
 
         try {
           await saveResult(result);
-          savedResultFingerprintsByUrl.set(
-            result.linkedinUrl,
+          savedResultFingerprintsByCandidateKey.set(
+            resultCandidateKey,
             resultFingerprint
           );
 
@@ -347,6 +349,7 @@ export default class CandidatesService {
           failedResultsCount += 1;
           console.error("Failed to save classification result", {
             error,
+            fullName: result.fullName,
             linkedinUrl: result.linkedinUrl,
           });
         }
@@ -416,6 +419,12 @@ export default class CandidatesService {
       label: result.label,
       status: result.status,
     });
+  }
+
+  private static toClassificationResultCandidateKey(
+    result: CandidateClassificationResult
+  ): string {
+    return result.linkedinUrl || result.fullName;
   }
 
   private static parseOrchestratorEventBlock(

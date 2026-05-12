@@ -7,7 +7,6 @@ import {
   ArrowUpIcon,
   CheckCircle2Icon,
   DownloadIcon,
-  XCircleIcon,
 } from "lucide-react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 
@@ -228,15 +227,10 @@ export function ClassificationResultsTable({
       return;
     }
 
-    onStatusChangeAction(
-      failedRows.length
-        ? ChatStatus.ClassificationFailed
-        : ChatStatus.ClassificationComplete
-    );
+    onStatusChangeAction(ChatStatus.ClassificationComplete);
 
     void utils.chat.listRecent.invalidate();
   }, [
-    failedRows.length,
     hasOpenRows,
     onStatusChangeAction,
     rows.length,
@@ -283,8 +277,6 @@ export function ClassificationResultsTable({
             <div className="flex min-w-0 items-center gap-2">
               {isClassifying ? (
                 <Spinner className="size-4" />
-              ) : failedRows.length ? (
-                <XCircleIcon className="size-4 text-muted-foreground" />
               ) : (
                 <CheckCircle2Icon className="size-4 text-muted-foreground" />
               )}
@@ -293,6 +285,7 @@ export function ClassificationResultsTable({
                 <p className="truncate font-medium">Classificatieresultaten</p>
                 <p className="text-xs text-muted-foreground">
                   {isClassifying ? "Live" : "Resultaten"} - {progressLabel}
+                  {failedRows.length ? `, ${failedRows.length} mislukt` : ""}
                 </p>
               </div>
             </div>

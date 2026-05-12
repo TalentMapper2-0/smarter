@@ -41,6 +41,11 @@ type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
+type ClassificationStreamSummary = {
+  savedUniqueResultsCount: number;
+  failedResultsCount: number;
+};
+
 export default class CandidatesService {
   static async findUpload(
     ctx: Context,
@@ -240,7 +245,7 @@ export default class CandidatesService {
         );
       }
 
-      const savedResultsCount =
+      const { savedUniqueResultsCount, failedResultsCount } =
         await this.readAndSaveOrchestratorClassificationResults(
           response,
           profilesList,
@@ -252,17 +257,26 @@ export default class CandidatesService {
           }
         );
 
-      if (!savedResultsCount) {
-        throw new Error("No candidate classification results returned.");
-      }
+      await CandidatesRepository.markPendingClassificationFailed(ctx, {
+        chatId: input.chatId,
+      });
+
+      const finalStatus =
+        savedUniqueResultsCount || failedResultsCount
+          ? ChatStatus.ClassificationComplete
+          : ChatStatus.ClassificationFailed;
 
       await ChatsRepository.updateStatusForUser(ctx, {
         id: input.chatId,
         userId: ctx.user.id,
-        status: ChatStatus.ClassificationComplete,
+        status: finalStatus,
       });
 
-      return { flowStage: ChatStatus.ClassificationComplete };
+      if (!savedUniqueResultsCount && !failedResultsCount) {
+        throw new Error("No candidate classification results returned.");
+      }
+
+      return { flowStage: finalStatus };
     } catch (error) {
       await CandidatesRepository.markPendingClassificationFailed(ctx, {
         chatId: input.chatId,
@@ -282,9 +296,10 @@ export default class CandidatesService {
     response: Response,
     profilesList: string[],
     saveResult: (result: CandidateClassificationResult) => Promise<void>
-  ): Promise<number> {
+  ): Promise<ClassificationStreamSummary> {
     const savedResultFingerprintsByUrl = new Map<string, string>();
     let savedUniqueResultsCount = 0;
+    let failedResultsCount = 0;
 
     const saveEventResults = async (event: JsonValue): Promise<void> => {
       const candidates = this.findCandidateArray(event);
@@ -318,11 +333,22 @@ export default class CandidatesService {
           result.linkedinUrl
         );
 
-        await saveResult(result);
-        savedResultFingerprintsByUrl.set(result.linkedinUrl, resultFingerprint);
+        try {
+          await saveResult(result);
+          savedResultFingerprintsByUrl.set(
+            result.linkedinUrl,
+            resultFingerprint
+          );
 
-        if (isFirstSaveForCandidate) {
-          savedUniqueResultsCount += 1;
+          if (isFirstSaveForCandidate) {
+            savedUniqueResultsCount += 1;
+          }
+        } catch (error) {
+          failedResultsCount += 1;
+          console.error("Failed to save classification result", {
+            error,
+            linkedinUrl: result.linkedinUrl,
+          });
         }
       }
     };
@@ -335,7 +361,10 @@ export default class CandidatesService {
         await saveEventResults(parsed);
       }
 
-      return savedUniqueResultsCount;
+      return {
+        savedUniqueResultsCount,
+        failedResultsCount,
+      };
     }
 
     const reader = response.body.getReader();
@@ -350,11 +379,11 @@ export default class CandidatesService {
       }
 
       bufferedText += decoder.decode(value, { stream: true });
-      const lines = bufferedText.split(/\r?\n/);
-      bufferedText = lines.pop() ?? "";
+      const eventBlocks = bufferedText.split(/\r?\n\r?\n/);
+      bufferedText = eventBlocks.pop() ?? "";
 
-      for (const line of lines) {
-        const parsed = this.parseOrchestratorEventLine(line);
+      for (const eventBlock of eventBlocks) {
+        const parsed = this.parseOrchestratorEventBlock(eventBlock);
 
         if (parsed) {
           await saveEventResults(parsed);
@@ -365,14 +394,17 @@ export default class CandidatesService {
     const finalText = `${bufferedText}${decoder.decode()}`.trim();
 
     if (finalText) {
-      const parsed = this.parseOrchestratorEventLine(finalText);
+      const parsed = this.parseOrchestratorEventBlock(finalText);
 
       if (parsed) {
         await saveEventResults(parsed);
       }
     }
 
-    return savedUniqueResultsCount;
+    return {
+      savedUniqueResultsCount,
+      failedResultsCount,
+    };
   }
 
   private static toClassificationResultFingerprint(
@@ -385,22 +417,45 @@ export default class CandidatesService {
     });
   }
 
-  private static parseOrchestratorEventLine(line: string): JsonValue | null {
-    const trimmedLine = line.trim();
+  private static parseOrchestratorEventBlock(
+    eventBlock: string
+  ): JsonValue | null {
+    const lines = eventBlock
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
 
-    if (!trimmedLine || trimmedLine.startsWith("event:")) {
+    if (!lines.length) {
       return null;
     }
 
-    const dataText = trimmedLine.startsWith("data:")
-      ? trimmedLine.slice("data:".length).trim()
-      : trimmedLine;
+    const eventName = lines
+      .find((line) => line.startsWith("event:"))
+      ?.slice("event:".length)
+      .trim()
+      .toLowerCase();
+    const dataLines = lines
+      .filter((line) => !line.startsWith("event:") && !line.startsWith(":"))
+      .map((line) =>
+        line.startsWith("data:") ? line.slice("data:".length).trim() : line
+      );
+
+    const dataText = dataLines.join("\n");
 
     if (!dataText || dataText === "[DONE]") {
       return null;
     }
 
-    return this.parseJsonText(dataText);
+    const parsed = this.parseJsonText(dataText);
+
+    if (eventName === "error" && this.isJsonObject(parsed)) {
+      return {
+        ...parsed,
+        event: parsed.event ?? "error",
+      };
+    }
+
+    return parsed;
   }
 
   private static parseJsonText(text: string): JsonValue | null {
@@ -435,8 +490,10 @@ export default class CandidatesService {
       "results",
       "profiles",
       "data",
+      "payload",
       "output",
       "result",
+      "candidate",
     ];
 
     for (const key of candidateKeys) {
@@ -488,6 +545,11 @@ export default class CandidatesService {
       return null;
     }
 
+    const rawStatus = this.getStringField(value, ["status", "state"]);
+    const isErrorResult =
+      this.hasErrorField(value) ||
+      this.isErrorMarker(this.getStringField(value, ["type", "event"]));
+
     return {
       linkedinUrl,
       label:
@@ -505,9 +567,31 @@ export default class CandidatesService {
           "rationale",
           "summary",
           "motivation",
-        ]) ?? "",
-      status: this.getStringField(value, ["status"]) ?? "classified",
+          "error",
+          "message",
+          "detail",
+          "details",
+        ]) ?? (isErrorResult ? "Profiel kon niet worden geclassificeerd." : ""),
+      status: this.toCandidateStatus(rawStatus, isErrorResult),
     };
+  }
+
+  private static toCandidateStatus(
+    status: string | null,
+    isErrorResult: boolean
+  ): string {
+    const normalizedStatus = status?.trim().toLowerCase();
+
+    if (
+      normalizedStatus === "error" ||
+      normalizedStatus === "errored" ||
+      normalizedStatus === "failure" ||
+      normalizedStatus === "failed"
+    ) {
+      return "failed";
+    }
+
+    return status ?? (isErrorResult ? "failed" : "classified");
   }
 
   private static getStringField(
@@ -531,27 +615,38 @@ export default class CandidatesService {
     return Boolean(value) && !Array.isArray(value) && typeof value === "object";
   }
 
+  private static hasErrorField(value: Record<string, JsonValue>): boolean {
+    return ["error", "errors", "exception", "traceback"].some((key) =>
+      Boolean(value[key])
+    );
+  }
+
+  private static isErrorMarker(value: string | null): boolean {
+    return value?.trim().toLowerCase() === "error";
+  }
+
   private static isCandidateResultObject(value: JsonValue): boolean {
     if (!this.isJsonObject(value)) {
       return false;
     }
 
-    return Boolean(
-      this.getStringField(value, [
-        "linkedin_url",
-        "linkedinUrl",
-        "profile_url",
-        "profileUrl",
-        "profile",
-        "url",
-        "linkedin",
-      ]) ||
-      this.getStringField(value, [
-        "label",
-        "classification",
-        "category",
-        "decision",
-      ])
-    );
+    const profileUrl = this.getStringField(value, [
+      "linkedin_url",
+      "linkedinUrl",
+      "profile_url",
+      "profileUrl",
+      "profile",
+      "url",
+      "linkedin",
+    ]);
+
+    const classification = this.getStringField(value, [
+      "label",
+      "classification",
+      "category",
+      "decision",
+    ]);
+
+    return Boolean(profileUrl || classification);
   }
 }

@@ -87,6 +87,9 @@ export default function AgentConversation({ chat }: Props) {
     chatId: string;
     file: ChatSelectedCsvFile;
   } | null>(null);
+  const [processingCsvUploadChatId, setProcessingCsvUploadChatId] = useState<
+    string | null
+  >(null);
   const [optimisticUserTextState, setOptimisticUserTextState] = useState<{
     chatId: string;
     content: string;
@@ -120,6 +123,7 @@ export default function AgentConversation({ chat }: Props) {
       : chat.status;
   const selectedCsvFile =
     selectedCsvFileState?.chatId === chat.id ? selectedCsvFileState.file : null;
+  const isCsvUploadProcessing = processingCsvUploadChatId === chat.id;
   const optimisticUserText =
     optimisticUserTextState?.chatId === chat.id
       ? optimisticUserTextState.content
@@ -187,6 +191,7 @@ export default function AgentConversation({ chat }: Props) {
       message.metadata.answered !== true
   );
   const isPending =
+    isCsvUploadProcessing ||
     updateChatStatus.isPending ||
     reuploadCsv.isPending ||
     saveMappedCsv.isPending ||
@@ -386,18 +391,13 @@ export default function AgentConversation({ chat }: Props) {
 
   const handleCsvSelected = async (file: File) => {
     const mappingStatus = ChatStatus.MappingCsvColumns;
+    const selectedFile = {
+      name: file.name,
+      size: file.size,
+    };
 
-    setSelectedCsvFileState({
-      chatId: chat.id,
-      file: {
-        name: file.name,
-        size: file.size,
-      },
-    });
-    setOptimisticStatus({
-      chatId: chat.id,
-      status: mappingStatus,
-    });
+    setProcessingCsvUploadChatId(chat.id);
+    setOptimisticStatus(null);
     setCsvColumnsState(null);
     setColumnMappingState(null);
     setCsvRowsState(null);
@@ -447,6 +447,7 @@ export default function AgentConversation({ chat }: Props) {
           mappedRows: mapRowsToCandidates(parsedCsv.rows, nextMapping),
         });
 
+        setSelectedCsvFileState(null);
         setCsvColumnsState(null);
         setColumnMappingState(null);
         setCsvRowsState(null);
@@ -458,6 +459,10 @@ export default function AgentConversation({ chat }: Props) {
         return;
       }
 
+      setSelectedCsvFileState({
+        chatId: chat.id,
+        file: selectedFile,
+      });
       setCsvColumnsState({
         chatId: chat.id,
         columns: parsedCsv.columns,
@@ -488,6 +493,10 @@ export default function AgentConversation({ chat }: Props) {
       setCsvRowsState(null);
       setOptimisticStatus(null);
       throw error;
+    } finally {
+      setProcessingCsvUploadChatId((currentChatId) =>
+        currentChatId === chat.id ? null : currentChatId
+      );
     }
   };
 

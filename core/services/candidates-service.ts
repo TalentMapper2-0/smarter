@@ -412,6 +412,7 @@ export default class CandidatesService {
   ): string {
     return JSON.stringify({
       explanation: result.explanation,
+      fullName: result.fullName,
       label: result.label,
       status: result.status,
     });
@@ -541,7 +542,15 @@ export default class CandidatesService {
         "linkedin",
       ]) ?? fallbackLinkedinUrl;
 
-    if (!linkedinUrl) {
+    const fullName = this.getStringField(value, [
+      "full_name",
+      "fullName",
+      "name",
+      "candidate_name",
+      "candidateName",
+    ]);
+
+    if (!linkedinUrl && !fullName) {
       return null;
     }
 
@@ -551,7 +560,8 @@ export default class CandidatesService {
       this.isErrorMarker(this.getStringField(value, ["type", "event"]));
 
     return {
-      linkedinUrl,
+      linkedinUrl: linkedinUrl ?? "",
+      fullName: fullName ?? "",
       label:
         this.getStringField(value, [
           "label",
@@ -640,6 +650,14 @@ export default class CandidatesService {
       "linkedin",
     ]);
 
+    const fullName = this.getStringField(value, [
+      "full_name",
+      "fullName",
+      "name",
+      "candidate_name",
+      "candidateName",
+    ]);
+
     const classification = this.getStringField(value, [
       "label",
       "classification",
@@ -647,6 +665,6 @@ export default class CandidatesService {
       "decision",
     ]);
 
-    return Boolean(profileUrl || classification);
+    return Boolean(profileUrl || fullName || classification);
   }
 }

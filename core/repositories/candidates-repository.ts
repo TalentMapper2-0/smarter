@@ -18,6 +18,7 @@ type CreateCandidatesInput = {
 
 export type CandidateClassificationResult = {
   linkedinUrl: string;
+  fullName: string;
   label: string;
   explanation: string;
   status: string;
@@ -235,26 +236,160 @@ export default class CandidatesRepository {
     const { supabase } = ctx;
 
     for (const result of results) {
-      const { data, error } = await supabase
-        .from("classify_candidates")
-        .update({
-          explanation: result.explanation,
-          label: result.label,
-          status: result.status,
-        })
-        .eq("chat_id", chatId)
-        .eq("linkedin_url", result.linkedinUrl)
-        .select("id");
+      const updateValues = {
+        explanation: result.explanation,
+        label: result.label,
+        status: result.status,
+      };
 
-      if (error) {
-        throw error;
+      let matchedRows: { id: string }[] | null = null;
+
+      if (result.linkedinUrl) {
+        const { data, error } = await supabase
+          .from("classify_candidates")
+          .update(updateValues)
+          .eq("chat_id", chatId)
+          .eq("linkedin_url", result.linkedinUrl)
+          .select("id");
+
+        if (error) {
+          throw error;
+        }
+
+        matchedRows = data;
       }
 
-      if (!data?.length) {
+      if (!matchedRows?.length && result.fullName) {
+        const candidateId = await this.findBestCandidateIdByFullName(ctx, {
+          chatId,
+          fullName: result.fullName,
+        });
+
+        if (candidateId) {
+          const { data, error } = await supabase
+            .from("classify_candidates")
+            .update(updateValues)
+            .eq("id", candidateId)
+            .eq("chat_id", chatId)
+            .select("id");
+
+          if (error) {
+            throw error;
+          }
+
+          matchedRows = data;
+        }
+      }
+
+      if (!matchedRows?.length) {
         throw new Error(
-          `No uploaded candidate found for LinkedIn URL: ${result.linkedinUrl}`
+          `No uploaded candidate found for LinkedIn URL "${result.linkedinUrl}" or name "${result.fullName}"`
         );
       }
     }
   }
+
+  private static async findBestCandidateIdByFullName(
+    ctx: Context,
+    { chatId, fullName }: { chatId: string; fullName: string }
+  ): Promise<string | null> {
+    const normalizedTargetName = normalizeName(fullName);
+
+    if (!normalizedTargetName) {
+      return null;
+    }
+
+    const { data, error } = await ctx.supabase
+      .from("classify_candidates")
+      .select("id,first_name,last_name")
+      .eq("chat_id", chatId);
+
+    if (error) {
+      throw error;
+    }
+
+    let bestMatch: { id: string; score: number } | null = null;
+    let secondBestScore = 0;
+
+    for (const row of data ?? []) {
+      const candidateName = normalizeName(
+        `${row.first_name ?? ""} ${row.last_name ?? ""}`
+      );
+
+      if (!candidateName) {
+        continue;
+      }
+
+      const score = getNameSimilarity(normalizedTargetName, candidateName);
+
+      if (!bestMatch || score > bestMatch.score) {
+        secondBestScore = bestMatch?.score ?? 0;
+        bestMatch = {
+          id: row.id,
+          score,
+        };
+      } else if (score > secondBestScore) {
+        secondBestScore = score;
+      }
+    }
+
+    if (!bestMatch || bestMatch.score < 0.82) {
+      return null;
+    }
+
+    if (bestMatch.score < 1 && bestMatch.score - secondBestScore < 0.08) {
+      return null;
+    }
+
+    return bestMatch.id;
+  }
+}
+
+function normalizeName(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function getNameSimilarity(left: string, right: string): number {
+  if (left === right) {
+    return 1;
+  }
+
+  if (left.includes(right) || right.includes(left)) {
+    return 0.92;
+  }
+
+  const maxLength = Math.max(left.length, right.length);
+
+  if (!maxLength) {
+    return 0;
+  }
+
+  return 1 - getLevenshteinDistance(left, right) / maxLength;
+}
+
+function getLevenshteinDistance(left: string, right: string): number {
+  const previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
+    let previousDiagonal = previousRow[0];
+    previousRow[0] = leftIndex + 1;
+
+    for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
+      const deletion = previousRow[rightIndex + 1] + 1;
+      const insertion = previousRow[rightIndex] + 1;
+      const substitution =
+        previousDiagonal + (left[leftIndex] === right[rightIndex] ? 0 : 1);
+
+      previousDiagonal = previousRow[rightIndex + 1];
+      previousRow[rightIndex + 1] = Math.min(deletion, insertion, substitution);
+    }
+  }
+
+  return previousRow[right.length];
 }

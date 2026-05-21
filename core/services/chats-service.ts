@@ -11,6 +11,8 @@ import { CandidateCreate } from "@/types/candidate";
 import { messages as chatMessages } from "@/lib/chat/messages";
 import { getNextStatusAfterInput } from "@/lib/chat/workflow";
 
+export type AgentChoice = "SourcingAgent" | "AnalysisAgent";
+
 export default class ChatsService {
   static async create(ctx: Context, title: string): Promise<Chat> {
     if (!ctx.user) {
@@ -59,6 +61,147 @@ export default class ChatsService {
     return ChatsRepository.listRecentForUser(ctx, {
       userId: ctx.user.id,
     });
+  }
+
+  static async selectAgent(
+    ctx: Context,
+    {
+      chatId,
+      agent,
+    }: {
+      chatId: string;
+      agent: AgentChoice;
+    }
+  ): Promise<{ messages: ChatMessage[]; status: ChatStatus }> {
+    if (!ctx.user) {
+      throw new Error("Not authenticated");
+    }
+
+    const chat = await ChatsRepository.findByIdForUser(ctx, {
+      id: chatId,
+      userId: ctx.user.id,
+    });
+
+    if (!chat) {
+      throw new Error("Chat not found");
+    }
+
+    if (chat.status !== ChatStatus.Initialized) {
+      throw new Error("This chat has already selected an agent.");
+    }
+
+    const selectedAgentMessage = await ChatsRepository.addMessage(ctx, {
+      chatId,
+      userId: ctx.user.id,
+      role: ChatMessageRole.User,
+      content: agent,
+    });
+
+    if (agent === "SourcingAgent") {
+      const uploadRequestMessage =
+        await ChatsRepository.createMessageAndUpdateStatus(ctx, {
+          chatId,
+          userId: ctx.user.id,
+          role: ChatMessageRole.Assistant,
+          type: ChatMessageType.CsvUploadRequest,
+          content: chatMessages.chatInitialized,
+          metadata: {
+            answered: false,
+          },
+          nextStatus: ChatStatus.WaitingForCsvInput,
+        });
+
+      return {
+        messages: [
+          selectedAgentMessage,
+          ...(uploadRequestMessage ? [uploadRequestMessage] : []),
+        ],
+        status: ChatStatus.WaitingForCsvInput,
+      };
+    }
+
+    const analysisSelectedMessage = await ChatsRepository.addMessage(ctx, {
+      chatId,
+      userId: ctx.user.id,
+      role: ChatMessageRole.Assistant,
+      content: chatMessages.analysisAgentSelected,
+    });
+
+    const endMessage = await ChatsRepository.createMessageAndUpdateStatus(ctx, {
+      chatId,
+      userId: ctx.user.id,
+      role: ChatMessageRole.Assistant,
+      type: ChatMessageType.EndOfChat,
+      content: chatMessages.chatClosed,
+      nextStatus: ChatStatus.Closed,
+    });
+
+    return {
+      messages: [
+        selectedAgentMessage,
+        analysisSelectedMessage,
+        ...(endMessage ? [endMessage] : []),
+      ],
+      status: ChatStatus.Closed,
+    };
+  }
+
+  static async completeSourcingFlow(
+    ctx: Context,
+    { chatId }: { chatId: string }
+  ): Promise<{ messages: ChatMessage[]; status: ChatStatus }> {
+    if (!ctx.user) {
+      throw new Error("Not authenticated");
+    }
+
+    const chat = await ChatsRepository.findByIdForUser(ctx, {
+      id: chatId,
+      userId: ctx.user.id,
+    });
+
+    if (!chat) {
+      throw new Error("Chat not found");
+    }
+
+    if (
+      chat.status !== ChatStatus.ClassifyingCandidates &&
+      chat.status !== ChatStatus.ClassificationComplete
+    ) {
+      throw new Error("This chat is not ready to complete.");
+    }
+
+    const hasEndMessage = chat.messages?.some(
+      (message) =>
+        message.role === ChatMessageRole.Assistant &&
+        message.type === ChatMessageType.EndOfChat &&
+        message.content === chatMessages.chatClosed
+    );
+
+    await ChatsRepository.updateStatusForUser(ctx, {
+      id: chatId,
+      userId: ctx.user.id,
+      status: ChatStatus.ClassificationComplete,
+    });
+
+    if (hasEndMessage) {
+      return {
+        messages: [],
+        status: ChatStatus.ClassificationComplete,
+      };
+    }
+
+    const endMessage = await ChatsRepository.addMessage(ctx, {
+      chatId,
+      userId: ctx.user.id,
+      role: ChatMessageRole.Assistant,
+      type: ChatMessageType.EndOfChat,
+      content: chatMessages.chatClosed,
+    });
+
+    return {
+      messages: [endMessage],
+      status: ChatStatus.ClassificationComplete,
+    };
   }
 
   static async reuploadCsv(

@@ -33,6 +33,7 @@ import {
   ChatCsvFileAttachment,
   type ChatSelectedCsvFile,
 } from "./chat-csv-dropzone";
+import type { AgentChoice } from "./messages/agent-selection-message";
 import { ChatMessageRenderer } from "./chat-message-renderer";
 import { ClassificationResultsTable } from "./classification-results-table";
 import { ColumnMapping, REQUIRED_FIELDS } from "./constants";
@@ -60,6 +61,8 @@ type StreamEvent =
 export default function AgentConversation({ chat }: Props) {
   const utils = trpc.useUtils();
   const updateChatStatus = trpc.chat.updateStatus.useMutation();
+  const selectAgent = trpc.chat.selectAgent.useMutation();
+  const completeSourcingFlow = trpc.chat.completeSourcingFlow.useMutation();
   const reuploadCsv = trpc.chat.reuploadCsv.useMutation();
   const saveMappedCsv = trpc.chat.saveMappedCsv.useMutation();
   const uploadCsvMetadata = trpc.chat.uploadCsvMetadata.useMutation();
@@ -67,6 +70,7 @@ export default function AgentConversation({ chat }: Props) {
   const saveComment = trpc.chat.saveComment.useMutation();
   const confirmComment = trpc.chat.confirmComment.useMutation();
   const requestedStreamStatusRef = useRef<string | null>(null);
+  const completedSourcingFlowChatIdRef = useRef<string | null>(null);
   const [localMessageState, setLocalMessageState] = useState<{
     chatId: string;
     messages: ChatMessage[];
@@ -153,6 +157,7 @@ export default function AgentConversation({ chat }: Props) {
       ? columnMappingState.mapping
       : createEmptyMapping();
   const isWaitingForCsvInput = currentStatus === ChatStatus.WaitingForCsvInput;
+  const isAgentSelectionOpen = currentStatus === ChatStatus.Initialized;
   const isMappingCsvColumns = currentStatus === ChatStatus.MappingCsvColumns;
   const isNeedsCsvColumnMapping =
     currentStatus === ChatStatus.NeedsCsvColumnMapping;
@@ -171,6 +176,10 @@ export default function AgentConversation({ chat }: Props) {
     : isWaitingForComment
       ? "Voeg opmerkingen toe"
       : "Antwoorden";
+  const shouldShowComposer =
+    !isAgentSelectionOpen &&
+    currentStatus !== ChatStatus.Closed &&
+    currentStatus !== ChatStatus.ClassificationComplete;
   const messages = deriveAnsweredRequestMessages(
     persistedMessages,
     currentStatus
@@ -192,6 +201,8 @@ export default function AgentConversation({ chat }: Props) {
   );
   const isPending =
     isCsvUploadProcessing ||
+    selectAgent.isPending ||
+    completeSourcingFlow.isPending ||
     updateChatStatus.isPending ||
     reuploadCsv.isPending ||
     saveMappedCsv.isPending ||
@@ -211,13 +222,48 @@ export default function AgentConversation({ chat }: Props) {
   }, []);
 
   const handleClassificationStatusChange = useCallback(
-    (status: ChatStatus) => {
+    async (status: ChatStatus) => {
+      if (status === ChatStatus.ClassificationComplete) {
+        if (completedSourcingFlowChatIdRef.current === chat.id) {
+          return;
+        }
+
+        completedSourcingFlowChatIdRef.current = chat.id;
+
+        try {
+          const result = await completeSourcingFlow.mutateAsync({
+            chatId: chat.id,
+          });
+
+          for (const message of result.messages) {
+            appendLocalMessage(message);
+          }
+
+          setOptimisticStatus({
+            chatId: chat.id,
+            status: result.status,
+          });
+
+          void utils.chat.listRecent.invalidate();
+        } catch (error) {
+          completedSourcingFlowChatIdRef.current = null;
+          console.error("Failed to complete sourcing flow", error);
+        }
+
+        return;
+      }
+
       setOptimisticStatus({
         chatId: chat.id,
         status,
       });
     },
-    [chat.id]
+    [
+      appendLocalMessage,
+      chat.id,
+      completeSourcingFlow,
+      utils.chat.listRecent,
+    ]
   );
 
   const streamAssistantMessage = useCallback(async () => {
@@ -500,6 +546,32 @@ export default function AgentConversation({ chat }: Props) {
     }
   };
 
+  const handleAgentChoice = async (agent: AgentChoice) => {
+    try {
+      const result = await selectAgent.mutateAsync({
+        chatId: chat.id,
+        agent,
+      });
+
+      for (const message of result.messages) {
+        appendLocalMessage(message);
+      }
+
+      setOptimisticStatus({
+        chatId: chat.id,
+        status: result.status,
+      });
+
+      void utils.chat.listRecent.invalidate();
+    } catch (error) {
+      console.error("Failed to select agent", error);
+      setOptimisticStatus({
+        chatId: chat.id,
+        status: ChatStatus.Initialized,
+      });
+    }
+  };
+
   const handleColumnMappingChange = async (nextMapping: ColumnMapping) => {
     setColumnMappingState({
       chatId: chat.id,
@@ -576,6 +648,21 @@ export default function AgentConversation({ chat }: Props) {
   };
 
   const handleChatSubmit = async (content: string) => {
+    if (isAgentSelectionOpen) {
+      appendLocalMessage({
+        ...mapDbMessageToChatMessage({
+          id: createLocalMessageKey(),
+          chat_id: chat.id,
+          role: ChatMessageRole.Assistant,
+          type: ChatMessageType.Text,
+          content: chatMessages.agentSelectionRetry,
+          created_at: new Date().toISOString(),
+          meta_data: {},
+        }),
+      });
+      return;
+    }
+
     if (isWaitingForVacancy) {
       setOptimisticUserTextState({
         chatId: chat.id,
@@ -673,11 +760,13 @@ export default function AgentConversation({ chat }: Props) {
               columns={csvColumns}
               mapping={columnMapping}
               isPending={isPending}
+              isAgentSelectionOpen={isAgentSelectionOpen}
               handlers={{
                 onCsvSelected: handleCsvSelected,
                 onColumnMappingChange: handleColumnMappingChange,
                 onReuploadCsv: handleReuploadCsv,
                 onCommentChoice: handleCommentChoice,
+                onAgentChoice: handleAgentChoice,
               }}
             />
           ))}
@@ -741,11 +830,13 @@ export default function AgentConversation({ chat }: Props) {
                 columns={csvColumns}
                 mapping={columnMapping}
                 isPending={isPending}
+                isAgentSelectionOpen={isAgentSelectionOpen}
                 handlers={{
                   onCsvSelected: handleCsvSelected,
                   onColumnMappingChange: handleColumnMappingChange,
                   onReuploadCsv: handleReuploadCsv,
                   onCommentChoice: handleCommentChoice,
+                  onAgentChoice: handleAgentChoice,
                 }}
               />
             ) : null
@@ -767,11 +858,13 @@ export default function AgentConversation({ chat }: Props) {
                 columns={csvColumns}
                 mapping={columnMapping}
                 isPending={isPending}
+                isAgentSelectionOpen={isAgentSelectionOpen}
                 handlers={{
                   onCsvSelected: handleCsvSelected,
                   onColumnMappingChange: handleColumnMappingChange,
                   onReuploadCsv: handleReuploadCsv,
                   onCommentChoice: handleCommentChoice,
+                  onAgentChoice: handleAgentChoice,
                 }}
               />
             ) : null
@@ -790,11 +883,13 @@ export default function AgentConversation({ chat }: Props) {
                 columns={csvColumns}
                 mapping={columnMapping}
                 isPending={isPending}
+                isAgentSelectionOpen={isAgentSelectionOpen}
                 handlers={{
                   onCsvSelected: handleCsvSelected,
                   onColumnMappingChange: handleColumnMappingChange,
                   onReuploadCsv: handleReuploadCsv,
                   onCommentChoice: handleCommentChoice,
+                  onAgentChoice: handleAgentChoice,
                 }}
               />
             ) : null
@@ -803,13 +898,15 @@ export default function AgentConversation({ chat }: Props) {
 
         <ConversationScrollButton />
       </Conversation>
-      <div className="shrink-0 bg-background px-4 pt-2 pb-4">
-        <ChatComposer
-          disabled={isChatInputDisabled}
-          placeholder={composerPlaceholder}
-          onSubmitAction={handleChatSubmit}
-        />
-      </div>
+      {shouldShowComposer ? (
+        <div className="shrink-0 bg-background px-4 pt-2 pb-4">
+          <ChatComposer
+            disabled={isChatInputDisabled}
+            placeholder={composerPlaceholder}
+            onSubmitAction={handleChatSubmit}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

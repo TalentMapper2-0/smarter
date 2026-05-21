@@ -2,11 +2,16 @@
 
 import type { ChatMessage } from "@/types/chat";
 import { ChatMessageType } from "@/types/chat";
+import { messages as chatMessages } from "@/lib/chat/messages";
 import type { ColumnMapping } from "./constants";
+import AgentSelectionMessage, {
+  type AgentChoice,
+} from "./messages/agent-selection-message";
 import CommentRequestMessage from "./messages/comment-request-message";
 import CsvColumnMappingRequestMessage from "./messages/csv-column-mapping-request-message";
 import CsvFileMessage from "./messages/csv-file-message";
 import CsvUploadMessage from "./messages/csv-upload-message";
+import EndOfChatMessage from "./messages/end-of-chat-message";
 import ErrorChatMessage from "./messages/error-message";
 import TextMessage from "./messages/text-message";
 import UnsupportedChatMessage from "./messages/unsupported-chat-message";
@@ -23,8 +28,10 @@ type ChatMessageRendererProps = {
       wantsComment: boolean,
       messageId: string
     ) => void | Promise<void>;
+    onAgentChoice: (agent: AgentChoice) => void | Promise<void>;
   };
   isPending?: boolean;
+  isAgentSelectionOpen?: boolean;
 };
 
 export function ChatMessageRenderer({
@@ -33,9 +40,20 @@ export function ChatMessageRenderer({
   mapping,
   handlers,
   isPending = false,
+  isAgentSelectionOpen = false,
 }: ChatMessageRendererProps) {
   switch (message.type) {
     case ChatMessageType.Text:
+      if (message.content === chatMessages.agentSelectionRequest) {
+        return (
+          <AgentSelectionMessage
+            disabled={!isAgentSelectionOpen || isPending}
+            message={message}
+            onAgentChoice={handlers.onAgentChoice}
+          />
+        );
+      }
+
       return <TextMessage message={message} />;
 
     case ChatMessageType.CsvUploadRequest:
@@ -79,6 +97,9 @@ export function ChatMessageRenderer({
 
     case ChatMessageType.Error:
       return <ErrorChatMessage message={message} />;
+
+    case ChatMessageType.EndOfChat:
+      return <EndOfChatMessage message={message} />;
 
     default:
       return <UnsupportedChatMessage message={message} />;

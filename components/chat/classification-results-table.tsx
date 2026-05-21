@@ -31,7 +31,7 @@ import { createClient } from "@/utils/supabase/client";
 type ClassificationResultsTableProps = {
   chatId: string;
   status: ChatStatus;
-  onStatusChangeAction: (status: ChatStatus) => void;
+  onStatusChangeAction: (status: ChatStatus) => void | Promise<void>;
 };
 
 type CandidateClassificationDbRow = {
@@ -257,7 +257,7 @@ export function ClassificationResultsTable({
       return;
     }
 
-    onStatusChangeAction(ChatStatus.ClassificationComplete);
+    void onStatusChangeAction(ChatStatus.ClassificationComplete);
 
     void utils.chat.listRecent.invalidate();
   }, [

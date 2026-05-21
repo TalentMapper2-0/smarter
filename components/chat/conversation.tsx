@@ -752,7 +752,7 @@ export default function AgentConversation({ chat }: Props) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent>
+        <ConversationContent className="pb-6">
           {messages.map((message) => (
             <ChatMessageRenderer
               key={message.id}
@@ -899,7 +899,7 @@ export default function AgentConversation({ chat }: Props) {
         <ConversationScrollButton />
       </Conversation>
       {shouldShowComposer ? (
-        <div className="shrink-0 bg-background px-4 pt-2 pb-4">
+        <div className="sticky bottom-0 z-10 shrink-0 bg-background px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <ChatComposer
             disabled={isChatInputDisabled}
             placeholder={composerPlaceholder}

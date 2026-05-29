@@ -7,7 +7,7 @@ import {
   CheckCircle2Icon,
   DownloadIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 
 import { Message, MessageContent } from "@/components/ai-elements/message";
@@ -74,6 +74,7 @@ export function ClassificationResultsTable({
   const [realtimeConnectedByChatId, setRealtimeConnectedByChatId] = useState<
     Record<string, boolean>
   >({});
+  const requestedClassificationChatIdRef = useRef<string | null>(null);
 
   const isRealtimeConnected = realtimeConnectedByChatId[chatId] ?? false;
 
@@ -96,6 +97,30 @@ export function ClassificationResultsTable({
       void utils.chat.listRecent.invalidate();
     },
   });
+
+  useEffect(() => {
+    if (status !== ChatStatus.ReadyToClassify) {
+      return;
+    }
+
+    if (
+      classify.isPending ||
+      requestedClassificationChatIdRef.current === chatId
+    ) {
+      return;
+    }
+
+    requestedClassificationChatIdRef.current = chatId;
+
+    classify.mutate(
+      { chatId },
+      {
+        onError: () => {
+          requestedClassificationChatIdRef.current = null;
+        },
+      }
+    );
+  }, [chatId, classify, status]);
 
   useEffect(() => {
     const supabase = createClient();

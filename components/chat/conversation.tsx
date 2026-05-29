@@ -176,10 +176,6 @@ export default function AgentConversation({ chat }: Props) {
     : isWaitingForComment
       ? "Voeg opmerkingen toe"
       : "Antwoorden";
-  const shouldShowComposer =
-    !isAgentSelectionOpen &&
-    currentStatus !== ChatStatus.Closed &&
-    currentStatus !== ChatStatus.ClassificationComplete;
   const messages = deriveAnsweredRequestMessages(
     persistedMessages,
     currentStatus
@@ -258,12 +254,7 @@ export default function AgentConversation({ chat }: Props) {
         status,
       });
     },
-    [
-      appendLocalMessage,
-      chat.id,
-      completeSourcingFlow,
-      utils.chat.listRecent,
-    ]
+    [appendLocalMessage, chat.id, completeSourcingFlow, utils.chat.listRecent]
   );
 
   const streamAssistantMessage = useCallback(async () => {
@@ -898,15 +889,13 @@ export default function AgentConversation({ chat }: Props) {
 
         <ConversationScrollButton />
       </Conversation>
-      {shouldShowComposer ? (
-        <div className="sticky bottom-0 z-10 shrink-0 bg-background px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <ChatComposer
-            disabled={isChatInputDisabled}
-            placeholder={composerPlaceholder}
-            onSubmitAction={handleChatSubmit}
-          />
-        </div>
-      ) : null}
+      <div className="sticky bottom-0 z-10 shrink-0 bg-background px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <ChatComposer
+          disabled={isChatInputDisabled}
+          placeholder={composerPlaceholder}
+          onSubmitAction={handleChatSubmit}
+        />
+      </div>
     </div>
   );
 }

@@ -1,4 +1,7 @@
 export const messages = {
+  agentSelectionRequest: "Welke agent wil je gebruiken?",
+  agentSelectionRetry:
+    "Kies een agent via de knoppen: SourcingAgent of AnalysisAgent.",
   chatInitialized: "Upload een CSV bestand om te beginnen.",
 
   csvAnalyzing: "Ik analyseer je CSV-bestand.",
@@ -17,6 +20,7 @@ export const messages = {
   commentTextRequest: "Typ je opmerkingen hieronder.",
   readyToClassify:
     "Dank je. Alles staat klaar om de kandidaten te classificeren.",
+  analysisAgentSelected: "Hey je hebt de AnalysisAgent gekozen.",
   chatClosed: "Deze chat is afgesloten.",
 } as const;
 

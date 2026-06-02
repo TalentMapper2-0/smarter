@@ -63,6 +63,49 @@ export const chatsRouter = router({
       });
     }
   }),
+  selectAgent: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.uuid(),
+        agent: z.enum(["SourcingAgent", "AnalysisAgent"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ChatsService.selectAgent(ctx, input);
+      } catch (error) {
+        console.error("chat.selectAgent failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error ? error.message : "Failed to select agent",
+          cause: error,
+        });
+      }
+    }),
+  completeSourcingFlow: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.uuid(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ChatsService.completeSourcingFlow(ctx, input);
+      } catch (error) {
+        console.error("chat.completeSourcingFlow failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to complete sourcing flow",
+          cause: error,
+        });
+      }
+    }),
   reuploadCsv: protectedProcedure
     .input(
       z.object({

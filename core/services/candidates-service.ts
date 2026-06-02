@@ -24,13 +24,10 @@ type ClassifyCandidatesInput = {
   chatId: string;
 };
 
-type OrchestratorClassifyRequest = {
-  service_name: "Classification_Agent";
-  payload: {
-    profiles_list: string[];
-    job_description: string;
-    comment: string;
-  };
+type OrchestratorClassifyPayload = {
+  profiles_list: string[];
+  job_description: string;
+  comment: string;
 };
 
 type JsonValue =
@@ -47,10 +44,7 @@ type ClassificationStreamSummary = {
 };
 
 export default class CandidatesService {
-  static async findUpload(
-    ctx: Context,
-    { chatId }: { chatId: string }
-  ) {
+  static async findUpload(ctx: Context, { chatId }: { chatId: string }) {
     if (!ctx.user) {
       throw new Error("Not authenticated");
     }
@@ -214,14 +208,14 @@ export default class CandidatesService {
       throw new Error("No LinkedIn profile URLs found.");
     }
 
-    const requestBody: OrchestratorClassifyRequest = {
-      service_name: "Classification_Agent",
-      payload: {
-        profiles_list: profilesList,
-        job_description: upload.vacancyText,
-        comment: upload.commentText,
-      },
+    const requestPayload: OrchestratorClassifyPayload = {
+      profiles_list: profilesList,
+      job_description: upload.vacancyText,
+      comment: upload.commentText,
     };
+    const formData = new FormData();
+    formData.set("service_name", "Classification_Agent");
+    formData.set("payload", JSON.stringify(requestPayload));
 
     try {
       const response = await fetch(
@@ -229,12 +223,11 @@ export default class CandidatesService {
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
             Accept: "text/event-stream, application/json, text/plain",
             Authorization: `Bearer ${parsedEnv.ORCHESTRATOR_API_KEY}`,
             "x-api-key": parsedEnv.ORCHESTRATOR_API_KEY,
           },
-          body: JSON.stringify(requestBody),
+          body: formData,
         }
       );
 
@@ -321,9 +314,8 @@ export default class CandidatesService {
 
         const resultFingerprint =
           this.toClassificationResultFingerprint(result);
-        const resultCandidateKey = this.toClassificationResultCandidateKey(
-          result
-        );
+        const resultCandidateKey =
+          this.toClassificationResultCandidateKey(result);
 
         if (
           savedResultFingerprintsByCandidateKey.get(resultCandidateKey) ===

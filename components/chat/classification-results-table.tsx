@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownIcon,
   ArrowUpDownIcon,
@@ -8,6 +7,7 @@ import {
   CheckCircle2Icon,
   DownloadIcon,
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 
 import { Message, MessageContent } from "@/components/ai-elements/message";
@@ -31,7 +31,7 @@ import { createClient } from "@/utils/supabase/client";
 type ClassificationResultsTableProps = {
   chatId: string;
   status: ChatStatus;
-  onStatusChangeAction: (status: ChatStatus) => void;
+  onStatusChangeAction: (status: ChatStatus) => void | Promise<void>;
 };
 
 type CandidateClassificationDbRow = {
@@ -65,7 +65,6 @@ export function ClassificationResultsTable({
 }: ClassificationResultsTableProps) {
   const utils = trpc.useUtils();
   const { scrollToBottom } = useStickToBottomContext();
-  const startedClassificationChatIdRef = useRef<string | null>(null);
 
   const [sort, setSort] = useState<SortState>(defaultSort);
   const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
@@ -75,6 +74,7 @@ export function ClassificationResultsTable({
   const [realtimeConnectedByChatId, setRealtimeConnectedByChatId] = useState<
     Record<string, boolean>
   >({});
+  const requestedClassificationChatIdRef = useRef<string | null>(null);
 
   const isRealtimeConnected = realtimeConnectedByChatId[chatId] ?? false;
 
@@ -99,41 +99,92 @@ export function ClassificationResultsTable({
   });
 
   useEffect(() => {
+    if (status !== ChatStatus.ReadyToClassify) {
+      return;
+    }
+
     if (
-      status !== ChatStatus.ReadyToClassify ||
       classify.isPending ||
-      !data?.length ||
-      startedClassificationChatIdRef.current === chatId
+      requestedClassificationChatIdRef.current === chatId
     ) {
       return;
     }
 
-    startedClassificationChatIdRef.current = chatId;
-    void classify.mutateAsync({ chatId }).catch((error) => {
-      startedClassificationChatIdRef.current = null;
-      console.error("Failed to start classification", error);
-    });
-  }, [chatId, classify, data?.length, status]);
+    requestedClassificationChatIdRef.current = chatId;
+
+    classify.mutate(
+      { chatId },
+      {
+        onError: () => {
+          requestedClassificationChatIdRef.current = null;
+        },
+      }
+    );
+  }, [chatId, classify, status]);
 
   useEffect(() => {
     const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let isDisposed = false;
 
-    const channel = supabase
-      .channel(`classify-candidates-${chatId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "classify_candidates",
-          filter: `chat_id=eq.${chatId}`,
-        },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            const oldRow = payload.old as Partial<CandidateClassificationDbRow>;
-            const deletedRowId = oldRow.id;
+    const subscribe = async () => {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
 
-            if (!deletedRowId) {
+      console.log("Realtime auth before subscribe", {
+        hasSession: Boolean(session),
+        userId: session?.user.id,
+        role: session?.user.role,
+        error,
+      });
+
+      if (!session?.access_token) {
+        console.warn("No Supabase session token, not subscribing to realtime");
+        return;
+      }
+
+      supabase.realtime.setAuth(session.access_token);
+
+      if (isDisposed) {
+        return;
+      }
+
+      channel = supabase
+        .channel(`classify-candidates-${chatId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "classify_candidates",
+            filter: `chat_id=eq.${chatId}`,
+          },
+          (payload) => {
+            if (payload.eventType === "DELETE") {
+              const oldRow =
+                payload.old as Partial<CandidateClassificationDbRow>;
+              const deletedRowId = oldRow.id;
+
+              if (!deletedRowId) {
+                return;
+              }
+
+              setRealtimeRowsByChatId((current) => ({
+                ...current,
+                [chatId]: {
+                  ...(current[chatId] ?? {}),
+                  [deletedRowId]: null,
+                },
+              }));
+
+              return;
+            }
+
+            const newRow = payload.new as CandidateClassificationDbRow;
+
+            if (!newRow.id) {
               return;
             }
 
@@ -141,37 +192,41 @@ export function ClassificationResultsTable({
               ...current,
               [chatId]: {
                 ...(current[chatId] ?? {}),
-                [deletedRowId]: null,
+                [newRow.id]: mapDbRowToClassificationRow(newRow),
               },
             }));
-
-            return;
           }
+        )
+        .subscribe((subscriptionStatus, err) => {
+          console.log(`Supabase subscription status for chat ${chatId}:`, {
+            subscriptionStatus,
+            err,
+          });
 
-          const newRow = payload.new as CandidateClassificationDbRow;
-
-          if (!newRow.id) {
-            return;
-          }
-
-          setRealtimeRowsByChatId((current) => ({
+          setRealtimeConnectedByChatId((current) => ({
             ...current,
-            [chatId]: {
-              ...(current[chatId] ?? {}),
-              [newRow.id]: mapDbRowToClassificationRow(newRow),
-            },
+            [chatId]: subscriptionStatus === "SUBSCRIBED",
           }));
-        }
-      )
-      .subscribe((subscriptionStatus) => {
-        setRealtimeConnectedByChatId((current) => ({
-          ...current,
-          [chatId]: subscriptionStatus === "SUBSCRIBED",
-        }));
-      });
+        });
+    };
+
+    void subscribe();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) {
+        supabase.realtime.setAuth(session.access_token);
+      }
+    });
 
     return () => {
-      void supabase.removeChannel(channel);
+      isDisposed = true;
+      subscription.unsubscribe();
+
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
     };
   }, [chatId]);
 
@@ -227,7 +282,7 @@ export function ClassificationResultsTable({
       return;
     }
 
-    onStatusChangeAction(ChatStatus.ClassificationComplete);
+    void onStatusChangeAction(ChatStatus.ClassificationComplete);
 
     void utils.chat.listRecent.invalidate();
   }, [
@@ -272,7 +327,7 @@ export function ClassificationResultsTable({
   return (
     <Message from={ChatMessageRole.Assistant}>
       <MessageContent className="w-full">
-        <div className="flex w-full max-w-full flex-col gap-3 rounded-lg border bg-background max-h-150 overflow-hidden">
+        <div className="flex max-h-150 w-full max-w-full flex-col gap-3 overflow-hidden rounded-lg border bg-background">
           <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-2">
               {isClassifying ? (
@@ -338,7 +393,8 @@ export function ClassificationResultsTable({
                     <TableCell>
                       <div className="min-w-36">
                         <p className="truncate font-medium">
-                          {`${row.firstName} ${row.lastName}`.trim() || "Onbekend"}
+                          {`${row.firstName} ${row.lastName}`.trim() ||
+                            "Onbekend"}
                         </p>
                         <p className="truncate text-xs text-muted-foreground">
                           {row.linkedinUrl || row.salesNavigatorId || "-"}

@@ -63,45 +63,47 @@ export const chatsRouter = router({
       });
     }
   }),
-  selectAgent: protectedProcedure
+  continueAnalysis: protectedProcedure
     .input(
       z.object({
         chatId: z.uuid(),
-        agent: z.enum(["SourcingAgent", "AnalysisAgent"]),
+        text: z.string().trim().min(1),
       })
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await ChatsService.selectAgent(ctx, input);
+        return await ChatsService.continueAnalysis(ctx, input);
       } catch (error) {
-        console.error("chat.selectAgent failed", error);
-
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message:
-            error instanceof Error ? error.message : "Failed to select agent",
-          cause: error,
-        });
-      }
-    }),
-  completeSourcingFlow: protectedProcedure
-    .input(
-      z.object({
-        chatId: z.uuid(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      try {
-        return await ChatsService.completeSourcingFlow(ctx, input);
-      } catch (error) {
-        console.error("chat.completeSourcingFlow failed", error);
+        console.error("chat.continueAnalysis failed", error);
 
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:
             error instanceof Error
               ? error.message
-              : "Failed to complete sourcing flow",
+              : "Failed to continue analysis",
+          cause: error,
+        });
+      }
+    }),
+  completeSourcingStage: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.uuid(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ChatsService.completeSourcingStage(ctx, input);
+      } catch (error) {
+        console.error("chat.completeSourcingStage failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to complete sourcing stage",
           cause: error,
         });
       }

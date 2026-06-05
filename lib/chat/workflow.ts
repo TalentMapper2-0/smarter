@@ -3,7 +3,10 @@ import type { MessageKey } from "./messages";
 
 export type ChatStatusAction =
   | "start_chat"
-  | "select_agent"
+  | "start_analysis"
+  | "upload_analysis_documents"
+  | "analyze_documents"
+  | "fill_analysis_fields"
   | "upload_csv"
   | "map_csv_columns"
   | "save_vacancy"
@@ -21,13 +24,29 @@ export type ChatStatusStep = {
 
 export const chatStatusFlow = {
   [ChatStatus.Initialized]: {
-    action: "select_agent",
+    action: "start_analysis",
+    expectsUserInput: false,
+    messageKey: "analysisStarted",
+    nextStatus: ChatStatus.WaitingForAnalysisInput,
+  },
+  [ChatStatus.WaitingForAnalysisInput]: {
+    action: "upload_analysis_documents",
     expectsUserInput: true,
-    messageKey: "agentSelectionRequest",
+    messageKey: "analysisUploadRequest",
+    nextStatus: ChatStatus.AnalyzingDocuments,
+  },
+  [ChatStatus.AnalyzingDocuments]: {
+    action: "analyze_documents",
+    expectsUserInput: false,
+  },
+  [ChatStatus.NeedsAnalysisFields]: {
+    action: "fill_analysis_fields",
+    expectsUserInput: true,
   },
   [ChatStatus.WaitingForCsvInput]: {
     action: "upload_csv",
     expectsUserInput: true,
+    messageKey: "chatInitialized",
     nextStatus: ChatStatus.MappingCsvColumns,
   },
   [ChatStatus.MappingCsvColumns]: {

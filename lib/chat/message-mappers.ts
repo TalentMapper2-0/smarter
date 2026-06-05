@@ -1,4 +1,10 @@
 import { ChatMessage, ChatMessageRole, ChatMessageType } from "@/types/chat";
+import type {
+  AnalysisAttachmentFile,
+  AnalysisFieldKey,
+  AnalysisFields,
+} from "@/types/chat";
+import { requestedAnalysisFields } from "./analysis";
 
 export type DbMessageRow = {
   id: string;
@@ -51,6 +57,56 @@ export function mapDbMessageToChatMessage(row: DbMessageRow): ChatMessage {
             typeof metadata.fileName === "string" ? metadata.fileName : "",
           fileSize:
             typeof metadata.fileSize === "number" ? metadata.fileSize : 0,
+        },
+      };
+
+    case ChatMessageType.AnalysisUploadRequest:
+      return {
+        ...base,
+        type,
+        metadata: {
+          answered: metadata.answered === true,
+        },
+      };
+
+    case ChatMessageType.AnalysisAttachment:
+      return {
+        ...base,
+        type,
+        metadata: {
+          files: toAnalysisAttachmentFiles(metadata.files),
+          ...(typeof metadata.prompt === "string" && metadata.prompt.trim()
+            ? { prompt: metadata.prompt }
+            : {}),
+        },
+      };
+
+    case ChatMessageType.AnalysisFieldRequest:
+      return {
+        ...base,
+        type,
+        metadata: {
+          answered: metadata.answered === true,
+          fields: toAnalysisFieldKeys(metadata.fields),
+          extractedFields: toAnalysisFields(metadata.extractedFields),
+          previousResponseId:
+            typeof metadata.previousResponseId === "string"
+              ? metadata.previousResponseId
+              : null,
+        },
+      };
+
+    case ChatMessageType.AnalysisResult:
+      return {
+        ...base,
+        type,
+        metadata: {
+          fields: toAnalysisFields(metadata.fields),
+          missingFields: toAnalysisFieldKeys(metadata.missingFields),
+          previousResponseId:
+            typeof metadata.previousResponseId === "string"
+              ? metadata.previousResponseId
+              : null,
         },
       };
 
@@ -153,4 +209,64 @@ function toMetadataRecord(value: unknown): Record<string, unknown> {
   }
 
   return value as Record<string, unknown>;
+}
+
+function toAnalysisAttachmentFiles(value: unknown): AnalysisAttachmentFile[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => {
+    if (!item || typeof item !== "object") {
+      return {
+        name: "document",
+        size: 0,
+        type: "",
+      };
+    }
+
+    const record = item as Record<string, unknown>;
+
+    return {
+      name: typeof record.name === "string" ? record.name : "document",
+      size: typeof record.size === "number" ? record.size : 0,
+      type: typeof record.type === "string" ? record.type : "",
+    };
+  });
+}
+
+function toAnalysisFieldKeys(value: unknown): AnalysisFieldKey[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is AnalysisFieldKey =>
+    requestedAnalysisFields.includes(item as AnalysisFieldKey)
+  );
+}
+
+function toAnalysisFields(value: unknown): AnalysisFields {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const record = value as Record<string, unknown>;
+  const fields: AnalysisFields = {};
+
+  for (const field of requestedAnalysisFields) {
+    const candidate = record[field];
+
+    if (
+      candidate === null ||
+      typeof candidate === "string" ||
+      typeof candidate === "number" ||
+      typeof candidate === "boolean" ||
+      (Array.isArray(candidate) &&
+        candidate.every((item) => typeof item === "string"))
+    ) {
+      fields[field] = candidate;
+    }
+  }
+
+  return fields;
 }

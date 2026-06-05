@@ -16,6 +16,9 @@ export type Chat = {
 
 export enum ChatStatus {
   Initialized = "initialized",
+  WaitingForAnalysisInput = "waiting_for_analysis_input",
+  AnalyzingDocuments = "analyzing_documents",
+  NeedsAnalysisFields = "needs_analysis_fields",
   WaitingForCsvInput = "waiting_for_csv_input",
   MappingCsvColumns = "mapping_csv_columns",
   NeedsCsvColumnMapping = "needs_csv_column_mapping",
@@ -32,6 +35,10 @@ export enum ChatStatus {
 
 export enum ChatMessageType {
   Text = "text",
+  AnalysisUploadRequest = "analysis_upload_request",
+  AnalysisAttachment = "analysis_attachment",
+  AnalysisFieldRequest = "analysis_field_request",
+  AnalysisResult = "analysis_result",
   CsvFile = "csv_file",
   CommentRequest = "comment_request",
   ClassificationResult = "classification_result",
@@ -61,6 +68,25 @@ export type ChatMessage = {
 
 export type RequestMode = "vacancy" | "csv" | "comment" | "ready";
 
+export type AnalysisFieldKey =
+  | "seniority"
+  | "region"
+  | "must_have_skills"
+  | "education"
+  | "company_size";
+
+export type AnalysisFieldValue = string | string[] | number | boolean | null;
+
+export type AnalysisFields = Partial<
+  Record<AnalysisFieldKey, AnalysisFieldValue>
+>;
+
+export type AnalysisAttachmentFile = {
+  name: string;
+  size: number;
+  type: string;
+};
+
 export type VacancyRequestState = {
   title: string;
   vacancy: string;
@@ -70,6 +96,28 @@ export type VacancyRequestState = {
 
 export type ChatMessageMetadataByType = {
   [ChatMessageType.Text]: Record<string, unknown>;
+
+  [ChatMessageType.AnalysisUploadRequest]: {
+    answered: boolean;
+  };
+
+  [ChatMessageType.AnalysisAttachment]: {
+    files: AnalysisAttachmentFile[];
+    prompt?: string;
+  };
+
+  [ChatMessageType.AnalysisFieldRequest]: {
+    answered: boolean;
+    fields: AnalysisFieldKey[];
+    extractedFields: AnalysisFields;
+    previousResponseId: string | null;
+  };
+
+  [ChatMessageType.AnalysisResult]: {
+    fields: AnalysisFields;
+    missingFields: AnalysisFieldKey[];
+    previousResponseId: string | null;
+  };
 
   [ChatMessageType.CsvFile]: {
     fileName: string;

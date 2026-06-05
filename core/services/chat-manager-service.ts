@@ -114,6 +114,10 @@ export default class ChatManagerService {
 
 function getMessageTypeForStatus(status: ChatStatus): ChatMessageType {
   switch (status) {
+    case ChatStatus.WaitingForAnalysisInput:
+      return ChatMessageType.AnalysisUploadRequest;
+    case ChatStatus.WaitingForCsvInput:
+      return ChatMessageType.CsvUploadRequest;
     case ChatStatus.NeedsCsvColumnMapping:
       return ChatMessageType.CsvColumnMappingRequest;
     case ChatStatus.CommentRequest:
@@ -131,6 +135,10 @@ function getMessageMetadataForStatus(
   chatId: string
 ): Record<string, unknown> {
   switch (status) {
+    case ChatStatus.WaitingForAnalysisInput:
+      return { answered: false };
+    case ChatStatus.WaitingForCsvInput:
+      return { answered: false };
     case ChatStatus.NeedsCsvColumnMapping:
       return { answered: false, importId: chatId };
     case ChatStatus.CommentRequest:
@@ -143,6 +151,8 @@ function getMessageMetadataForStatus(
 function isRequestMessageType(type: ChatMessageType) {
   return (
     type === ChatMessageType.CsvUploadRequest ||
+    type === ChatMessageType.AnalysisUploadRequest ||
+    type === ChatMessageType.AnalysisFieldRequest ||
     type === ChatMessageType.CsvColumnMappingRequest ||
     type === ChatMessageType.CommentRequest
   );

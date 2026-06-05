@@ -33,8 +33,8 @@ import {
   ChatCsvFileAttachment,
   type ChatSelectedCsvFile,
 } from "./chat-csv-dropzone";
-import type { AgentChoice } from "./messages/agent-selection-message";
 import { ChatMessageRenderer } from "./chat-message-renderer";
+import { ChatStageProgress } from "./chat-stage-progress";
 import { ClassificationResultsTable } from "./classification-results-table";
 import { ColumnMapping, REQUIRED_FIELDS } from "./constants";
 import { createEmptyMapping, parseCsv, suggestMapping } from "./csv-utils";
@@ -58,11 +58,11 @@ type StreamEvent =
       nextStatus?: ChatStatus;
     };
 
-export default function AgentConversation({ chat }: Props) {
+export default function ChatConversation({ chat }: Props) {
   const utils = trpc.useUtils();
   const updateChatStatus = trpc.chat.updateStatus.useMutation();
-  const selectAgent = trpc.chat.selectAgent.useMutation();
-  const completeSourcingFlow = trpc.chat.completeSourcingFlow.useMutation();
+  const continueAnalysis = trpc.chat.continueAnalysis.useMutation();
+  const completeSourcingStage = trpc.chat.completeSourcingStage.useMutation();
   const reuploadCsv = trpc.chat.reuploadCsv.useMutation();
   const saveMappedCsv = trpc.chat.saveMappedCsv.useMutation();
   const uploadCsvMetadata = trpc.chat.uploadCsvMetadata.useMutation();
@@ -70,7 +70,7 @@ export default function AgentConversation({ chat }: Props) {
   const saveComment = trpc.chat.saveComment.useMutation();
   const confirmComment = trpc.chat.confirmComment.useMutation();
   const requestedStreamStatusRef = useRef<string | null>(null);
-  const completedSourcingFlowChatIdRef = useRef<string | null>(null);
+  const completedSourcingStageChatIdRef = useRef<string | null>(null);
   const [localMessageState, setLocalMessageState] = useState<{
     chatId: string;
     messages: ChatMessage[];
@@ -92,6 +92,9 @@ export default function AgentConversation({ chat }: Props) {
     file: ChatSelectedCsvFile;
   } | null>(null);
   const [processingCsvUploadChatId, setProcessingCsvUploadChatId] = useState<
+    string | null
+  >(null);
+  const [processingAnalysisChatId, setProcessingAnalysisChatId] = useState<
     string | null
   >(null);
   const [optimisticUserTextState, setOptimisticUserTextState] = useState<{
@@ -128,6 +131,7 @@ export default function AgentConversation({ chat }: Props) {
   const selectedCsvFile =
     selectedCsvFileState?.chatId === chat.id ? selectedCsvFileState.file : null;
   const isCsvUploadProcessing = processingCsvUploadChatId === chat.id;
+  const isAnalysisProcessing = processingAnalysisChatId === chat.id;
   const optimisticUserText =
     optimisticUserTextState?.chatId === chat.id
       ? optimisticUserTextState.content
@@ -156,17 +160,24 @@ export default function AgentConversation({ chat }: Props) {
     columnMappingState?.chatId === chat.id
       ? columnMappingState.mapping
       : createEmptyMapping();
+  const isWaitingForAnalysisInput =
+    currentStatus === ChatStatus.WaitingForAnalysisInput;
+  const isAnalyzingDocuments = currentStatus === ChatStatus.AnalyzingDocuments;
+  const isNeedsAnalysisFields =
+    currentStatus === ChatStatus.NeedsAnalysisFields;
   const isWaitingForCsvInput = currentStatus === ChatStatus.WaitingForCsvInput;
-  const isAgentSelectionOpen = currentStatus === ChatStatus.Initialized;
   const isMappingCsvColumns = currentStatus === ChatStatus.MappingCsvColumns;
   const isNeedsCsvColumnMapping =
     currentStatus === ChatStatus.NeedsCsvColumnMapping;
   const isWaitingForVacancy = currentStatus === ChatStatus.WaitingForVacancy;
   const isCommentRequest = currentStatus === ChatStatus.CommentRequest;
   const isWaitingForComment = currentStatus === ChatStatus.WaitingForComment;
-  const canSubmitText = isWaitingForVacancy || isWaitingForComment;
+  const canSubmitText =
+    isNeedsAnalysisFields || isWaitingForVacancy || isWaitingForComment;
   const isChatInputDisabled =
     hasPendingStreamMessage ||
+    isWaitingForAnalysisInput ||
+    isAnalyzingDocuments ||
     isWaitingForCsvInput ||
     isMappingCsvColumns ||
     isNeedsCsvColumnMapping ||
@@ -175,7 +186,9 @@ export default function AgentConversation({ chat }: Props) {
     ? "Plak de vacaturetekst"
     : isWaitingForComment
       ? "Voeg opmerkingen toe"
-      : "Antwoorden";
+      : isNeedsAnalysisFields
+        ? "Vul de ontbrekende analysevelden aan"
+        : "Antwoorden";
   const messages = deriveAnsweredRequestMessages(
     persistedMessages,
     currentStatus
@@ -183,6 +196,11 @@ export default function AgentConversation({ chat }: Props) {
   const hasOpenCsvUploadRequest = messages.some(
     (message) =>
       message.type === ChatMessageType.CsvUploadRequest &&
+      message.metadata.answered !== true
+  );
+  const hasOpenAnalysisUploadRequest = messages.some(
+    (message) =>
+      message.type === ChatMessageType.AnalysisUploadRequest &&
       message.metadata.answered !== true
   );
   const hasOpenCsvColumnMappingRequest = messages.some(
@@ -196,9 +214,10 @@ export default function AgentConversation({ chat }: Props) {
       message.metadata.answered !== true
   );
   const isPending =
+    isAnalysisProcessing ||
     isCsvUploadProcessing ||
-    selectAgent.isPending ||
-    completeSourcingFlow.isPending ||
+    continueAnalysis.isPending ||
+    completeSourcingStage.isPending ||
     updateChatStatus.isPending ||
     reuploadCsv.isPending ||
     saveMappedCsv.isPending ||
@@ -220,14 +239,14 @@ export default function AgentConversation({ chat }: Props) {
   const handleClassificationStatusChange = useCallback(
     async (status: ChatStatus) => {
       if (status === ChatStatus.ClassificationComplete) {
-        if (completedSourcingFlowChatIdRef.current === chat.id) {
+        if (completedSourcingStageChatIdRef.current === chat.id) {
           return;
         }
 
-        completedSourcingFlowChatIdRef.current = chat.id;
+        completedSourcingStageChatIdRef.current = chat.id;
 
         try {
-          const result = await completeSourcingFlow.mutateAsync({
+          const result = await completeSourcingStage.mutateAsync({
             chatId: chat.id,
           });
 
@@ -242,8 +261,8 @@ export default function AgentConversation({ chat }: Props) {
 
           void utils.chat.listRecent.invalidate();
         } catch (error) {
-          completedSourcingFlowChatIdRef.current = null;
-          console.error("Failed to complete sourcing flow", error);
+          completedSourcingStageChatIdRef.current = null;
+          console.error("Failed to complete sourcing stage", error);
         }
 
         return;
@@ -254,7 +273,7 @@ export default function AgentConversation({ chat }: Props) {
         status,
       });
     },
-    [appendLocalMessage, chat.id, completeSourcingFlow, utils.chat.listRecent]
+    [appendLocalMessage, chat.id, completeSourcingStage, utils.chat.listRecent]
   );
 
   const streamAssistantMessage = useCallback(async () => {
@@ -426,6 +445,59 @@ export default function AgentConversation({ chat }: Props) {
       return mappedRow;
     });
 
+  const handleAnalysisSubmit = async (files: File[], text: string) => {
+    const formData = new FormData();
+
+    formData.set("message", text);
+
+    for (const file of files) {
+      formData.append("files", file, file.name);
+    }
+
+    setProcessingAnalysisChatId(chat.id);
+    setOptimisticStatus({
+      chatId: chat.id,
+      status: ChatStatus.AnalyzingDocuments,
+    });
+
+    try {
+      const response = await fetch(`/api/chats/${chat.id}/analysis`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to analyze documents");
+      }
+
+      const result = (await response.json()) as {
+        messages: ChatMessage[];
+        status: ChatStatus;
+      };
+
+      for (const message of result.messages) {
+        appendLocalMessage(message);
+      }
+
+      setOptimisticStatus({
+        chatId: chat.id,
+        status: result.status,
+      });
+
+      void utils.chat.listRecent.invalidate();
+    } catch (error) {
+      setOptimisticStatus({
+        chatId: chat.id,
+        status: ChatStatus.WaitingForAnalysisInput,
+      });
+      console.error("Failed to analyze documents", error);
+    } finally {
+      setProcessingAnalysisChatId((currentChatId) =>
+        currentChatId === chat.id ? null : currentChatId
+      );
+    }
+  };
+
   const handleCsvSelected = async (file: File) => {
     const mappingStatus = ChatStatus.MappingCsvColumns;
     const selectedFile = {
@@ -537,32 +609,6 @@ export default function AgentConversation({ chat }: Props) {
     }
   };
 
-  const handleAgentChoice = async (agent: AgentChoice) => {
-    try {
-      const result = await selectAgent.mutateAsync({
-        chatId: chat.id,
-        agent,
-      });
-
-      for (const message of result.messages) {
-        appendLocalMessage(message);
-      }
-
-      setOptimisticStatus({
-        chatId: chat.id,
-        status: result.status,
-      });
-
-      void utils.chat.listRecent.invalidate();
-    } catch (error) {
-      console.error("Failed to select agent", error);
-      setOptimisticStatus({
-        chatId: chat.id,
-        status: ChatStatus.Initialized,
-      });
-    }
-  };
-
   const handleColumnMappingChange = async (nextMapping: ColumnMapping) => {
     setColumnMappingState({
       chatId: chat.id,
@@ -639,18 +685,36 @@ export default function AgentConversation({ chat }: Props) {
   };
 
   const handleChatSubmit = async (content: string) => {
-    if (isAgentSelectionOpen) {
-      appendLocalMessage({
-        ...mapDbMessageToChatMessage({
-          id: createLocalMessageKey(),
-          chat_id: chat.id,
-          role: ChatMessageRole.Assistant,
-          type: ChatMessageType.Text,
-          content: chatMessages.agentSelectionRetry,
-          created_at: new Date().toISOString(),
-          meta_data: {},
-        }),
+    if (isNeedsAnalysisFields) {
+      setOptimisticUserTextState({
+        chatId: chat.id,
+        content,
       });
+
+      try {
+        const result = await continueAnalysis.mutateAsync({
+          chatId: chat.id,
+          text: content,
+        });
+
+        for (const message of result.messages) {
+          appendLocalMessage(message);
+        }
+
+        setOptimisticUserTextState(null);
+        setOptimisticStatus({
+          chatId: chat.id,
+          status: result.status,
+        });
+        void utils.chat.listRecent.invalidate();
+      } catch (error) {
+        setOptimisticUserTextState(null);
+        setOptimisticStatus({
+          chatId: chat.id,
+          status: ChatStatus.NeedsAnalysisFields,
+        });
+        console.error("Failed to continue analysis", error);
+      }
       return;
     }
 
@@ -742,6 +806,7 @@ export default function AgentConversation({ chat }: Props) {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
+      <ChatStageProgress status={currentStatus} />
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="pb-6">
           {messages.map((message) => (
@@ -751,13 +816,12 @@ export default function AgentConversation({ chat }: Props) {
               columns={csvColumns}
               mapping={columnMapping}
               isPending={isPending}
-              isAgentSelectionOpen={isAgentSelectionOpen}
               handlers={{
                 onCsvSelected: handleCsvSelected,
+                onAnalysisSubmit: handleAnalysisSubmit,
                 onColumnMappingChange: handleColumnMappingChange,
                 onReuploadCsv: handleReuploadCsv,
                 onCommentChoice: handleCommentChoice,
-                onAgentChoice: handleAgentChoice,
               }}
             />
           ))}
@@ -789,6 +853,17 @@ export default function AgentConversation({ chat }: Props) {
             </Message>
           ) : null}
 
+          {isAnalyzingDocuments ? (
+            <Message from={ChatMessageRole.Assistant}>
+              <MessageContent>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner className="size-4" />
+                  <span>Documenten analyseren...</span>
+                </div>
+              </MessageContent>
+            </Message>
+          ) : null}
+
           {isMappingCsvColumns ? (
             <Message from={ChatMessageRole.Assistant}>
               <MessageContent>
@@ -808,6 +883,30 @@ export default function AgentConversation({ chat }: Props) {
             />
           ) : null}
 
+          {isWaitingForAnalysisInput && !hasPendingStreamMessage ? (
+            !hasOpenAnalysisUploadRequest ? (
+              <ChatMessageRenderer
+                message={createLocalRequestMessage({
+                  id: `local-${chat.id}-analysis-upload-request`,
+                  chatId: chat.id,
+                  type: ChatMessageType.AnalysisUploadRequest,
+                  content: chatMessages.analysisUploadRequest,
+                  metadata: { answered: false },
+                })}
+                columns={csvColumns}
+                mapping={columnMapping}
+                isPending={isPending}
+                handlers={{
+                  onCsvSelected: handleCsvSelected,
+                  onAnalysisSubmit: handleAnalysisSubmit,
+                  onColumnMappingChange: handleColumnMappingChange,
+                  onReuploadCsv: handleReuploadCsv,
+                  onCommentChoice: handleCommentChoice,
+                }}
+              />
+            ) : null
+          ) : null}
+
           {isWaitingForCsvInput && !hasPendingStreamMessage ? (
             !hasOpenCsvUploadRequest ? (
               <ChatMessageRenderer
@@ -821,13 +920,12 @@ export default function AgentConversation({ chat }: Props) {
                 columns={csvColumns}
                 mapping={columnMapping}
                 isPending={isPending}
-                isAgentSelectionOpen={isAgentSelectionOpen}
                 handlers={{
                   onCsvSelected: handleCsvSelected,
+                  onAnalysisSubmit: handleAnalysisSubmit,
                   onColumnMappingChange: handleColumnMappingChange,
                   onReuploadCsv: handleReuploadCsv,
                   onCommentChoice: handleCommentChoice,
-                  onAgentChoice: handleAgentChoice,
                 }}
               />
             ) : null
@@ -849,13 +947,12 @@ export default function AgentConversation({ chat }: Props) {
                 columns={csvColumns}
                 mapping={columnMapping}
                 isPending={isPending}
-                isAgentSelectionOpen={isAgentSelectionOpen}
                 handlers={{
                   onCsvSelected: handleCsvSelected,
+                  onAnalysisSubmit: handleAnalysisSubmit,
                   onColumnMappingChange: handleColumnMappingChange,
                   onReuploadCsv: handleReuploadCsv,
                   onCommentChoice: handleCommentChoice,
-                  onAgentChoice: handleAgentChoice,
                 }}
               />
             ) : null
@@ -874,13 +971,12 @@ export default function AgentConversation({ chat }: Props) {
                 columns={csvColumns}
                 mapping={columnMapping}
                 isPending={isPending}
-                isAgentSelectionOpen={isAgentSelectionOpen}
                 handlers={{
                   onCsvSelected: handleCsvSelected,
+                  onAnalysisSubmit: handleAnalysisSubmit,
                   onColumnMappingChange: handleColumnMappingChange,
                   onReuploadCsv: handleReuploadCsv,
                   onCommentChoice: handleCommentChoice,
-                  onAgentChoice: handleAgentChoice,
                 }}
               />
             ) : null
@@ -914,6 +1010,35 @@ function deriveAnsweredRequestMessages(
   currentStatus: ChatStatus
 ): ChatMessage[] {
   return messages.map((message) => {
+    if (
+      message.type === ChatMessageType.AnalysisUploadRequest &&
+      currentStatus !== ChatStatus.Initialized &&
+      currentStatus !== ChatStatus.WaitingForAnalysisInput &&
+      message.metadata.answered !== true
+    ) {
+      return {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          answered: true,
+        },
+      };
+    }
+
+    if (
+      message.type === ChatMessageType.AnalysisFieldRequest &&
+      currentStatus !== ChatStatus.NeedsAnalysisFields &&
+      message.metadata.answered !== true
+    ) {
+      return {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          answered: true,
+        },
+      };
+    }
+
     if (
       message.type === ChatMessageType.CsvUploadRequest &&
       currentStatus !== ChatStatus.Initialized &&
@@ -971,6 +1096,7 @@ function createLocalRequestMessage({
   id: string;
   chatId: string;
   type:
+    | ChatMessageType.AnalysisUploadRequest
     | ChatMessageType.CsvUploadRequest
     | ChatMessageType.CsvColumnMappingRequest
     | ChatMessageType.CommentRequest;

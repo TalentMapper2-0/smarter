@@ -2,11 +2,11 @@
 
 import type { ChatMessage } from "@/types/chat";
 import { ChatMessageType } from "@/types/chat";
-import { messages as chatMessages } from "@/lib/chat/messages";
 import type { ColumnMapping } from "./constants";
-import AgentSelectionMessage, {
-  type AgentChoice,
-} from "./messages/agent-selection-message";
+import AnalysisAttachmentMessage from "./messages/analysis-attachment-message";
+import AnalysisFieldRequestMessage from "./messages/analysis-field-request-message";
+import AnalysisResultMessage from "./messages/analysis-result-message";
+import AnalysisUploadMessage from "./messages/analysis-upload-message";
 import CommentRequestMessage from "./messages/comment-request-message";
 import CsvColumnMappingRequestMessage from "./messages/csv-column-mapping-request-message";
 import CsvFileMessage from "./messages/csv-file-message";
@@ -22,16 +22,15 @@ type ChatMessageRendererProps = {
   mapping?: ColumnMapping;
   handlers: {
     onCsvSelected: (file: File) => void | Promise<void>;
+    onAnalysisSubmit: (files: File[], text: string) => void | Promise<void>;
     onColumnMappingChange: (mapping: ColumnMapping) => void | Promise<void>;
     onReuploadCsv: () => void | Promise<void>;
     onCommentChoice: (
       wantsComment: boolean,
       messageId: string
     ) => void | Promise<void>;
-    onAgentChoice: (agent: AgentChoice) => void | Promise<void>;
   };
   isPending?: boolean;
-  isAgentSelectionOpen?: boolean;
 };
 
 export function ChatMessageRenderer({
@@ -40,21 +39,28 @@ export function ChatMessageRenderer({
   mapping,
   handlers,
   isPending = false,
-  isAgentSelectionOpen = false,
 }: ChatMessageRendererProps) {
   switch (message.type) {
     case ChatMessageType.Text:
-      if (message.content === chatMessages.agentSelectionRequest) {
-        return (
-          <AgentSelectionMessage
-            disabled={!isAgentSelectionOpen || isPending}
-            message={message}
-            onAgentChoice={handlers.onAgentChoice}
-          />
-        );
-      }
-
       return <TextMessage message={message} />;
+
+    case ChatMessageType.AnalysisUploadRequest:
+      return (
+        <AnalysisUploadMessage
+          message={message}
+          isPending={isPending}
+          onAnalysisSubmit={handlers.onAnalysisSubmit}
+        />
+      );
+
+    case ChatMessageType.AnalysisAttachment:
+      return <AnalysisAttachmentMessage message={message} />;
+
+    case ChatMessageType.AnalysisFieldRequest:
+      return <AnalysisFieldRequestMessage message={message} />;
+
+    case ChatMessageType.AnalysisResult:
+      return <AnalysisResultMessage message={message} />;
 
     case ChatMessageType.CsvUploadRequest:
       return (

@@ -37,12 +37,11 @@ export default function AnalysisAttachmentMessage({
             <MessageResponse>{message.content}</MessageResponse>
           </MessageContent>
         ) : null}
-
         <Attachments className="justify-end" variant="list">
           {attachments.map((file) => (
             <Attachment data={file} key={file.id}>
               <AttachmentPreview />
-              <AttachmentInfo showMediaType />
+              <AttachmentInfo showMediaType  />
             </Attachment>
           ))}
         </Attachments>

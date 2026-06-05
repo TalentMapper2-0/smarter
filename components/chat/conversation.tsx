@@ -28,7 +28,7 @@ import {
   MessageContent,
   MessageResponse,
 } from "../ai-elements/message";
-import { ChatComposer } from "./chat-composer";
+import { ChatComposer, type ChatComposerMessage } from "./chat-composer";
 import {
   ChatCsvFileAttachment,
   type ChatSelectedCsvFile,
@@ -45,6 +45,30 @@ type Props = {
 
 const createLocalMessageKey = () =>
   `local-${Math.random().toString(36).slice(2, 10)}`;
+
+const acceptedAnalysisFileTypes = [
+  "application/pdf",
+  "text/plain",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+].join(",");
+
+async function filePartToFile(filePart: {
+  filename?: string;
+  mediaType?: string;
+  url?: string;
+}) {
+  if (!filePart.url) {
+    throw new Error("Attachment is missing file data");
+  }
+
+  const response = await fetch(filePart.url);
+  const blob = await response.blob();
+
+  return new File([blob], filePart.filename ?? "attachment", {
+    type: filePart.mediaType || blob.type,
+  });
+}
 
 type StreamEvent =
   | {
@@ -173,10 +197,12 @@ export default function ChatConversation({ chat }: Props) {
   const isCommentRequest = currentStatus === ChatStatus.CommentRequest;
   const isWaitingForComment = currentStatus === ChatStatus.WaitingForComment;
   const canSubmitText =
-    isNeedsAnalysisFields || isWaitingForVacancy || isWaitingForComment;
+    isWaitingForAnalysisInput ||
+    isNeedsAnalysisFields ||
+    isWaitingForVacancy ||
+    isWaitingForComment;
   const isChatInputDisabled =
     hasPendingStreamMessage ||
-    isWaitingForAnalysisInput ||
     isAnalyzingDocuments ||
     isWaitingForCsvInput ||
     isMappingCsvColumns ||
@@ -684,7 +710,21 @@ export default function ChatConversation({ chat }: Props) {
     }
   };
 
-  const handleChatSubmit = async (content: string) => {
+  const handleChatSubmit = async ({ text, files }: ChatComposerMessage) => {
+    const content = text;
+
+    if (isWaitingForAnalysisInput) {
+      try {
+        const analysisFiles = await Promise.all(files.map(filePartToFile));
+
+        await handleAnalysisSubmit(analysisFiles, content);
+      } catch (error) {
+        console.error("Failed to submit analysis from composer", error);
+      }
+
+      return;
+    }
+
     if (isNeedsAnalysisFields) {
       setOptimisticUserTextState({
         chatId: chat.id,
@@ -715,6 +755,7 @@ export default function ChatConversation({ chat }: Props) {
         });
         console.error("Failed to continue analysis", error);
       }
+
       return;
     }
 
@@ -741,6 +782,7 @@ export default function ChatConversation({ chat }: Props) {
         setOptimisticUserTextState(null);
         console.error("Failed to save vacancy", error);
       }
+
       return;
     }
 
@@ -767,7 +809,7 @@ export default function ChatConversation({ chat }: Props) {
       }
     }
   };
-
+  
   const handleCommentChoice = async (
     wantsComment: boolean,
     messageId?: string
@@ -987,8 +1029,16 @@ export default function ChatConversation({ chat }: Props) {
       </Conversation>
       <div className="sticky bottom-0 z-10 shrink-0 bg-background px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <ChatComposer
+          accept={
+            isWaitingForAnalysisInput ? acceptedAnalysisFileTypes : undefined
+          }
+          allowAttachments={isWaitingForAnalysisInput}
           disabled={isChatInputDisabled}
-          placeholder={composerPlaceholder}
+          placeholder={
+            isWaitingForAnalysisInput
+              ? "Upload documenten of geef extra context"
+              : composerPlaceholder
+          }
           onSubmitAction={handleChatSubmit}
         />
       </div>

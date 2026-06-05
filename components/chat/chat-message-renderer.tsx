@@ -6,7 +6,6 @@ import type { ColumnMapping } from "./constants";
 import AnalysisAttachmentMessage from "./messages/analysis-attachment-message";
 import AnalysisFieldRequestMessage from "./messages/analysis-field-request-message";
 import AnalysisResultMessage from "./messages/analysis-result-message";
-import AnalysisUploadMessage from "./messages/analysis-upload-message";
 import CommentRequestMessage from "./messages/comment-request-message";
 import CsvColumnMappingRequestMessage from "./messages/csv-column-mapping-request-message";
 import CsvFileMessage from "./messages/csv-file-message";
@@ -45,13 +44,7 @@ export function ChatMessageRenderer({
       return <TextMessage message={message} />;
 
     case ChatMessageType.AnalysisUploadRequest:
-      return (
-        <AnalysisUploadMessage
-          message={message}
-          isPending={isPending}
-          onAnalysisSubmit={handlers.onAnalysisSubmit}
-        />
-      );
+      return <TextMessage message={message} />;
 
     case ChatMessageType.AnalysisAttachment:
       return <AnalysisAttachmentMessage message={message} />;

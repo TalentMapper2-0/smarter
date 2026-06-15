@@ -1,3 +1,6 @@
+import { ProcessTurnInputSchema } from "@/schemas/input";
+import z from "zod";
+
 export type MessageFile = {
   id: string;
   messageId: string;
@@ -17,20 +20,20 @@ export type Chat = {
 export enum ChatStatus {
   Initialized = "initialized",
   WaitingForAnalysisInput = "waiting_for_analysis_input",
-  AnalyzingDocuments = "analyzing_documents",
-  NeedsAnalysisFields = "needs_analysis_fields",
-  WaitingForCsvInput = "waiting_for_csv_input",
-  MappingCsvColumns = "mapping_csv_columns",
-  NeedsCsvColumnMapping = "needs_csv_column_mapping",
-  CsvColumnsMatched = "csv_columns_matched",
-  WaitingForVacancy = "waiting_for_vacancy",
-  CommentRequest = "comment_request",
-  WaitingForComment = "waiting_for_comment",
-  ReadyToClassify = "ready_to_classify",
-  ClassifyingCandidates = "classifying_candidates",
-  ClassificationComplete = "classification_complete",
-  ClassificationFailed = "classification_failed",
-  Closed = "closed",
+  // AnalyzingDocuments = "analyzing_documents",
+  // NeedsAnalysisFields = "needs_analysis_fields",
+  // WaitingForCsvInput = "waiting_for_csv_input",
+  // MappingCsvColumns = "mapping_csv_columns",
+  // NeedsCsvColumnMapping = "needs_csv_column_mapping",
+  // CsvColumnsMatched = "csv_columns_matched",
+  // WaitingForVacancy = "waiting_for_vacancy",
+  // CommentRequest = "comment_request",
+  // WaitingForComment = "waiting_for_comment",
+  // ReadyToClassify = "ready_to_classify",
+  // ClassifyingCandidates = "classifying_candidates",
+  // ClassificationComplete = "classification_complete",
+  // ClassificationFailed = "classification_failed",
+  // Closed = "closed",
 }
 
 export enum ChatMessageType {
@@ -150,4 +153,10 @@ export type ChatMessageMetadataByType = {
   [ChatMessageType.Unsupported]: Record<string, unknown>;
 
   [ChatMessageType.EndOfChat]: Record<string, unknown>;
+};
+
+export type ProcessTurnInput = z.infer<typeof ProcessTurnInputSchema>;
+
+export type ProcessTurnOutput = {
+  message: ChatMessage;
 };

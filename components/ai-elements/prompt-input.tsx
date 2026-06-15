@@ -178,8 +178,46 @@ const captureScreenshot = async (): Promise<File | null> => {
 // Provider Context & Types
 // ============================================================================
 
+export type PromptInputAttachment = FileUIPart & { id: string; file?: File };
+
+function createPromptInputAttachment(file: File): PromptInputAttachment {
+  return {
+    filename: file.name,
+    file,
+    id: nanoid(),
+    mediaType: file.type,
+    type: "file",
+    url: URL.createObjectURL(file),
+  };
+}
+
+function revokeAttachmentUrl(attachment: { url?: string }) {
+  if (attachment.url) {
+    URL.revokeObjectURL(attachment.url);
+  }
+}
+
+async function toFileUIPart(
+  attachment: PromptInputAttachment
+): Promise<FileUIPart> {
+  const { id, file, ...item } = attachment;
+  void id;
+  void file;
+
+  if (!item.url?.startsWith("blob:")) {
+    return item;
+  }
+
+  const dataUrl = await convertBlobUrlToDataUrl(item.url);
+
+  return {
+    ...item,
+    url: dataUrl ?? item.url,
+  };
+}
+
 export interface AttachmentsContext {
-  files: (FileUIPart & { id: string })[];
+  files: PromptInputAttachment[];
   add: (files: File[] | FileList) => void;
   remove: (id: string) => void;
   clear: () => void;
@@ -255,7 +293,7 @@ export const PromptInputProvider = ({
 
   // ----- attachments state (global when wrapped)
   const [attachmentFiles, setAttachmentFiles] = useState<
-    (FileUIPart & { id: string })[]
+    PromptInputAttachment[]
   >([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // oxlint-disable-next-line eslint(no-empty-function)
@@ -269,22 +307,14 @@ export const PromptInputProvider = ({
 
     setAttachmentFiles((prev) => [
       ...prev,
-      ...incoming.map((file) => ({
-        filename: file.name,
-        id: nanoid(),
-        mediaType: file.type,
-        type: "file" as const,
-        url: URL.createObjectURL(file),
-      })),
+      ...incoming.map(createPromptInputAttachment),
     ]);
   }, []);
 
   const remove = useCallback((id: string) => {
     setAttachmentFiles((prev) => {
       const found = prev.find((f) => f.id === id);
-      if (found?.url) {
-        URL.revokeObjectURL(found.url);
-      }
+      if (found) revokeAttachmentUrl(found);
       return prev.filter((f) => f.id !== id);
     });
   }, []);
@@ -292,9 +322,7 @@ export const PromptInputProvider = ({
   const clear = useCallback(() => {
     setAttachmentFiles((prev) => {
       for (const f of prev) {
-        if (f.url) {
-          URL.revokeObjectURL(f.url);
-        }
+        revokeAttachmentUrl(f);
       }
       return [];
     });
@@ -311,9 +339,7 @@ export const PromptInputProvider = ({
   useEffect(
     () => () => {
       for (const f of attachmentsRef.current) {
-        if (f.url) {
-          URL.revokeObjectURL(f.url);
-        }
+        revokeAttachmentUrl(f);
       }
     },
     []
@@ -484,6 +510,7 @@ export const PromptInputActionAddScreenshot = ({
 export interface PromptInputMessage {
   text: string;
   files: FileUIPart[];
+  nativeFiles: File[];
 }
 
 export type PromptInputProps = Omit<
@@ -533,7 +560,7 @@ export const PromptInput = ({
   const formRef = useRef<HTMLFormElement | null>(null);
 
   // ----- Local attachments (only used when no provider)
-  const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
+  const [items, setItems] = useState<PromptInputAttachment[]>([]);
   const files = usingProvider ? controller.attachments.files : items;
 
   // ----- Local referenced sources (always local to PromptInput)
@@ -564,6 +591,9 @@ export const PromptInput = ({
         .filter(Boolean);
 
       return patterns.some((pattern) => {
+        if (pattern.startsWith(".")) {
+          return f.name.toLowerCase().endsWith(pattern.toLowerCase());
+        }
         if (pattern.endsWith("/*")) {
           // e.g: image/* -> image/
           const prefix = pattern.slice(0, -1);
@@ -610,15 +640,9 @@ export const PromptInput = ({
             message: "Too many files. Some were not added.",
           });
         }
-        const next: (FileUIPart & { id: string })[] = [];
+        const next: PromptInputAttachment[] = [];
         for (const file of capped) {
-          next.push({
-            filename: file.name,
-            id: nanoid(),
-            mediaType: file.type,
-            type: "file",
-            url: URL.createObjectURL(file),
-          });
+          next.push(createPromptInputAttachment(file));
         }
         return [...prev, ...next];
       });
@@ -630,9 +654,7 @@ export const PromptInput = ({
     (id: string) =>
       setItems((prev) => {
         const found = prev.find((file) => file.id === id);
-        if (found?.url) {
-          URL.revokeObjectURL(found.url);
-        }
+        if (found) revokeAttachmentUrl(found);
         return prev.filter((file) => file.id !== id);
       }),
     []
@@ -688,9 +710,7 @@ export const PromptInput = ({
         ? controller?.attachments.clear()
         : setItems((prev) => {
             for (const file of prev) {
-              if (file.url) {
-                URL.revokeObjectURL(file.url);
-              }
+              revokeAttachmentUrl(file);
             }
             return [];
           }),
@@ -791,9 +811,7 @@ export const PromptInput = ({
     () => () => {
       if (!usingProvider) {
         for (const f of filesRef.current) {
-          if (f.url) {
-            URL.revokeObjectURL(f.url);
-          }
+          revokeAttachmentUrl(f);
         }
       }
     },
@@ -860,22 +878,16 @@ export const PromptInput = ({
       }
 
       try {
-        // Convert blob URLs to data URLs asynchronously
-        const convertedFiles: FileUIPart[] = await Promise.all(
-          files.map(async ({ id: _id, ...item }) => {
-            if (item.url?.startsWith("blob:")) {
-              const dataUrl = await convertBlobUrlToDataUrl(item.url);
-              // If conversion failed, keep the original blob URL
-              return {
-                ...item,
-                url: dataUrl ?? item.url,
-              };
-            }
-            return item;
-          })
-        );
+        const nativeFiles = files
+          .map((item) => item.file)
+          .filter((file): file is File => file instanceof File);
 
-        const result = onSubmit({ files: convertedFiles, text }, event);
+        const convertedFiles = await Promise.all(files.map(toFileUIPart));
+
+        const result = onSubmit(
+          { files: convertedFiles, nativeFiles, text },
+          event
+        );
 
         // Handle both sync and async onSubmit
         if (result instanceof Promise) {

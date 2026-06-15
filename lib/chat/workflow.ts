@@ -18,7 +18,7 @@ export type ChatStatusAction =
 export type ChatStatusStep = {
   action: ChatStatusAction;
   expectsUserInput: boolean;
-  messageKey?: MessageKey;
+  message?: string;
   nextStatus?: ChatStatus;
 };
 
@@ -26,102 +26,102 @@ export const chatStatusFlow = {
   [ChatStatus.Initialized]: {
     action: "start_analysis",
     expectsUserInput: false,
-    messageKey: "analysisStarted",
+    message: "Hey! Laten we beginnen. Ik ga je helpen om je door het proces van sourcing te leiden.",
     nextStatus: ChatStatus.WaitingForAnalysisInput,
   },
   [ChatStatus.WaitingForAnalysisInput]: {
     action: "upload_analysis_documents",
     expectsUserInput: true,
-    messageKey: "analysisUploadRequest",
-    nextStatus: ChatStatus.AnalyzingDocuments,
+    message: "analysisUploadRequest",
+    nextStatus: undefined
   },
-  [ChatStatus.AnalyzingDocuments]: {
-    action: "analyze_documents",
-    expectsUserInput: false,
-  },
-  [ChatStatus.NeedsAnalysisFields]: {
-    action: "fill_analysis_fields",
-    expectsUserInput: true,
-  },
-  [ChatStatus.WaitingForCsvInput]: {
-    action: "upload_csv",
-    expectsUserInput: true,
-    messageKey: "chatInitialized",
-    nextStatus: ChatStatus.MappingCsvColumns,
-  },
-  [ChatStatus.MappingCsvColumns]: {
-    action: "map_csv_columns",
-    expectsUserInput: false,
-    nextStatus: ChatStatus.CsvColumnsMatched,
-  },
-  [ChatStatus.NeedsCsvColumnMapping]: {
-    action: "map_csv_columns",
-    expectsUserInput: true,
-    messageKey: "csvNeedsColumnMapping",
-    nextStatus: ChatStatus.CsvColumnsMatched,
-  },
-  [ChatStatus.CsvColumnsMatched]: {
-    action: "none",
-    expectsUserInput: false,
-    messageKey: "csvColumnsMatched",
-    nextStatus: ChatStatus.WaitingForVacancy,
-  },
-  [ChatStatus.WaitingForVacancy]: {
-    action: "save_vacancy",
-    expectsUserInput: true,
-    messageKey: "vacancyRequest",
-    nextStatus: ChatStatus.CommentRequest,
-  },
-  [ChatStatus.CommentRequest]: {
-    action: "confirm_comment",
-    expectsUserInput: true,
-    messageKey: "commentRequest",
-  },
-  [ChatStatus.WaitingForComment]: {
-    action: "save_comment",
-    expectsUserInput: true,
-    messageKey: "commentTextRequest",
-    nextStatus: ChatStatus.ReadyToClassify,
-  },
-  [ChatStatus.ReadyToClassify]: {
-    action: "classify_candidates",
-    expectsUserInput: false,
-    messageKey: "readyToClassify",
-  },
-  [ChatStatus.ClassifyingCandidates]: {
-    action: "none",
-    expectsUserInput: false,
-  },
-  [ChatStatus.ClassificationComplete]: {
-    action: "none",
-    expectsUserInput: false,
-    messageKey: "chatClosed",
-  },
-  [ChatStatus.ClassificationFailed]: {
-    action: "none",
-    expectsUserInput: true,
-  },
-  [ChatStatus.Closed]: {
-    action: "none",
-    expectsUserInput: false,
-    messageKey: "chatClosed",
-  },
+  // [ChatStatus.AnalyzingDocuments]: {
+  //   action: "analyze_documents",
+  //   expectsUserInput: false,
+  // },
+  // [ChatStatus.NeedsAnalysisFields]: {
+  //   action: "fill_analysis_fields",
+  //   expectsUserInput: true,
+  // },
+  // [ChatStatus.WaitingForCsvInput]: {
+  //   action: "upload_csv",
+  //   expectsUserInput: true,
+  //   messageKey: "chatInitialized",
+  //   nextStatus: ChatStatus.MappingCsvColumns,
+  // },
+  // [ChatStatus.MappingCsvColumns]: {
+  //   action: "map_csv_columns",
+  //   expectsUserInput: false,
+  //   nextStatus: ChatStatus.CsvColumnsMatched,
+  // },
+  // [ChatStatus.NeedsCsvColumnMapping]: {
+  //   action: "map_csv_columns",
+  //   expectsUserInput: true,
+  //   messageKey: "csvNeedsColumnMapping",
+  //   nextStatus: ChatStatus.CsvColumnsMatched,
+  // },
+  // [ChatStatus.CsvColumnsMatched]: {
+  //   action: "none",
+  //   expectsUserInput: false,
+  //   messageKey: "csvColumnsMatched",
+  //   nextStatus: ChatStatus.WaitingForVacancy,
+  // },
+  // [ChatStatus.WaitingForVacancy]: {
+  //   action: "save_vacancy",
+  //   expectsUserInput: true,
+  //   messageKey: "vacancyRequest",
+  //   nextStatus: ChatStatus.CommentRequest,
+  // },
+  // [ChatStatus.CommentRequest]: {
+  //   action: "confirm_comment",
+  //   expectsUserInput: true,
+  //   messageKey: "commentRequest",
+  // },
+  // [ChatStatus.WaitingForComment]: {
+  //   action: "save_comment",
+  //   expectsUserInput: true,
+  //   messageKey: "commentTextRequest",
+  //   nextStatus: ChatStatus.ReadyToClassify,
+  // },
+  // [ChatStatus.ReadyToClassify]: {
+  //   action: "classify_candidates",
+  //   expectsUserInput: false,
+  //   messageKey: "readyToClassify",
+  // },
+  // [ChatStatus.ClassifyingCandidates]: {
+  //   action: "none",
+  //   expectsUserInput: false,
+  // },
+  // [ChatStatus.ClassificationComplete]: {
+  //   action: "none",
+  //   expectsUserInput: false,
+  //   messageKey: "chatClosed",
+  // },
+  // [ChatStatus.ClassificationFailed]: {
+  //   action: "none",
+  //   expectsUserInput: true,
+  // },
+  // [ChatStatus.Closed]: {
+  //   action: "none",
+  //   expectsUserInput: false,
+  //   messageKey: "chatClosed",
+  // },
 } satisfies Record<ChatStatus, ChatStatusStep>;
 
-export function getChatStatusStep(status: ChatStatus): ChatStatusStep {
-  return chatStatusFlow[status];
-}
+// export function getChatStatusStep(status: ChatStatus): ChatStatusStep {
+//   return chatStatusFlow[status];
+// }
 
-export function getNextStatusAfterInput(status: ChatStatus) {
-  return getChatStatusStep(status).nextStatus;
-}
+// export function getNextStatusAfterInput(status: ChatStatus) {
+//   return getChatStatusStep(status).nextStatus;
+// }
 
-export function getNextStatusAfterStatusMessage(status: ChatStatus) {
-  const step = getChatStatusStep(status);
+// export function getNextStatusAfterStatusMessage(status: ChatStatus) {
+//   const step = getChatStatusStep(status);
 
-  if (step.expectsUserInput) {
-    return undefined;
-  }
+//   if (step.expectsUserInput) {
+//     return undefined;
+//   }
 
-  return step.nextStatus;
-}
+//   return step.nextStatus;
+// }

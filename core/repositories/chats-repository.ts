@@ -51,7 +51,6 @@ export default class ChatsRepository {
 
     await ChatsRepository.addMessage(ctx, {
       chatId: chat.id,
-      userId: user.id,
       content: title,
       role: ChatMessageRole.User,
     });
@@ -147,14 +146,12 @@ export default class ChatsRepository {
     ctx: Context,
     {
       chatId,
-      userId,
       content,
       role,
       type = ChatMessageType.Text,
       metadata = {},
     }: {
       chatId: string;
-      userId: string;
       content: string | null;
       role: ChatMessageRole;
       type?: ChatMessageType;
@@ -167,7 +164,6 @@ export default class ChatsRepository {
       .from("chats")
       .select("id")
       .eq("id", chatId)
-      .eq("user_id", userId)
       .maybeSingle();
 
     if (chatError) {
@@ -398,6 +394,26 @@ export default class ChatsRepository {
     }
   }
 
+  static async findById(
+    ctx: Context,
+    id: string
+  ): Promise<Chat | null> {
+    const { supabase } = ctx;
+
+    const { data, error } = await supabase
+      .from("chats")
+      .select(chatSelect)
+      .eq("id", id)
+      .order("created_at", { referencedTable: "messages", ascending: true })
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return data ? mapDbChatToChat(data as DbChatRow) : null;
+  }
+
   static async findByIdForUser(
     ctx: Context,
     { id, userId }: { id: string; userId: string }
@@ -419,17 +435,9 @@ export default class ChatsRepository {
     return data ? mapDbChatToChat(data as DbChatRow) : null;
   }
 
-  static async updateStatusForUser(
+  static async updateStatus(
     ctx: Context,
-    {
-      id,
-      userId,
-      status,
-    }: {
-      id: string;
-      userId: string;
-      status: ChatStatus;
-    }
+    { id, status }: { id: string; status: ChatStatus }
   ): Promise<Chat | null> {
     const { supabase } = ctx;
 
@@ -439,7 +447,6 @@ export default class ChatsRepository {
         status,
       })
       .eq("id", id)
-      .eq("user_id", userId)
       .select(chatSelect)
       .order("created_at", { referencedTable: "messages", ascending: true })
       .maybeSingle();

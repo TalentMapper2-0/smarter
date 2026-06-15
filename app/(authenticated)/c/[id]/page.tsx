@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import ChatsService from "@/core/services/chats-service";
 import { createServerContext } from "@/trpc/server/caller";
-import ChatConversation from "@/components/chat/conversation";
+import Chat from "@/components/chat/chat";
 
 type PageProps = {
   params: Promise<{
@@ -21,7 +21,7 @@ export default async function Page({ params }: PageProps) {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl">
-      <ChatConversation chat={chat} />
+      <Chat chat={chat} />
     </div>
   );
 }

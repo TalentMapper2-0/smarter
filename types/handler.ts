@@ -1,5 +1,5 @@
 import { Context } from "@/trpc/server/init";
-import { Chat, ChatMessage, ChatStatus, ProcessTurnInput } from "@/types/chat";
+import { Chat, ChatStatus, ProcessTurnInput } from "@/types/chat";
 
 export type TurnHandlerArgs = {
   ctx: Context;
@@ -7,6 +7,6 @@ export type TurnHandlerArgs = {
   input?: ProcessTurnInput;
 };
 
-export type TurnHandler = (args: TurnHandlerArgs) => Promise<ChatMessage>;
+export type TurnHandler = (args: TurnHandlerArgs) => Promise<Response>;
 
 export type TurnHandlers = Partial<Record<ChatStatus, TurnHandler>>;

@@ -5,7 +5,7 @@ import {
   ChatMessage,
   ChatMessageRole,
   ChatMessageType,
-  ProcessTurnInput
+  ProcessTurnInput,
 } from "@/types/chat";
 import ChatsRepository from "../repositories/chats-repository";
 
@@ -23,7 +23,7 @@ export default class ChatsService {
   static async processTurn(
     ctx: Context,
     { input }: { input: ProcessTurnInput }
-  ): Promise<ChatMessage> {
+  ): Promise<Response> {
     if (!ctx.user) {
       throw new Error("Not authenticated");
     }

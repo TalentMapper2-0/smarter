@@ -21,6 +21,10 @@ export const messages = {
   readyToClassify:
     "Dank je. Alles staat klaar om de kandidaten te classificeren.",
   analysisAgentSelected: "Hey je hebt de AnalysisAgent gekozen.",
+  analysisSourcesRequest:
+    "Plak tekst of URLs en voeg eventueel PDF-bestanden toe om de doelgroep te analyseren.",
+  analysisFieldRequest: "Ik mis nog een veld. Vul dit veld aan.",
+  analysisComplete: "Dank je. De doelgroepanalyse is compleet.",
   chatClosed: "Deze chat is afgesloten.",
 } as const;
 

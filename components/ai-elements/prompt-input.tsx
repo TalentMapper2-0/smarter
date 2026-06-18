@@ -564,6 +564,10 @@ export const PromptInput = ({
         .filter(Boolean);
 
       return patterns.some((pattern) => {
+        if (pattern.startsWith(".")) {
+          return f.name.toLowerCase().endsWith(pattern.toLowerCase());
+        }
+
         if (pattern.endsWith("/*")) {
           // e.g: image/* -> image/
           const prefix = pattern.slice(0, -1);
@@ -862,7 +866,10 @@ export const PromptInput = ({
       try {
         // Convert blob URLs to data URLs asynchronously
         const convertedFiles: FileUIPart[] = await Promise.all(
-          files.map(async ({ id: _id, ...item }) => {
+          files.map(async (file) => {
+            const { id, ...item } = file;
+            void id;
+
             if (item.url?.startsWith("blob:")) {
               const dataUrl = await convertBlobUrlToDataUrl(item.url);
               // If conversion failed, keep the original blob URL
@@ -1368,7 +1375,7 @@ export const PromptInputTabLabel = ({
   // oxlint-disable-next-line eslint-plugin-jsx-a11y(heading-has-content)
   <h3
     className={cn(
-      "mb-2 px-3 font-medium text-muted-foreground text-xs",
+      "mb-2 px-3 text-xs font-medium text-muted-foreground",
       className
     )}
     {...props}

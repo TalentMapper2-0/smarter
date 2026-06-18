@@ -23,6 +23,8 @@ export enum ChatStatus {
   WaitingForVacancy = "waiting_for_vacancy",
   CommentRequest = "comment_request",
   WaitingForComment = "waiting_for_comment",
+  WaitingForAnalysisSources = "waiting_for_analysis_sources",
+  WaitingForAnalysisField = "waiting_for_analysis_field",
   ReadyToClassify = "ready_to_classify",
   ClassifyingCandidates = "classifying_candidates",
   ClassificationComplete = "classification_complete",

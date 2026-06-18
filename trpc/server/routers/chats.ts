@@ -177,6 +177,60 @@ export const chatsRouter = router({
         });
       }
     }),
+  submitAnalysisSources: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        text: z.string(),
+        files: z.array(
+          z.object({
+            filename: z.string().optional(),
+            mediaType: z.string().optional(),
+            type: z.literal("file"),
+            url: z.string(),
+          })
+        ),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ChatsService.submitAnalysisSources(ctx, input);
+      } catch (error) {
+        console.error("chat.submitAnalysisSources failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to submit analysis sources",
+          cause: error,
+        });
+      }
+    }),
+  saveAnalysisField: protectedProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        value: z.string().trim().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ChatsService.saveAnalysisField(ctx, input);
+      } catch (error) {
+        console.error("chat.saveAnalysisField failed", error);
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to save analysis field",
+          cause: error,
+        });
+      }
+    }),
   saveVacancy: protectedProcedure
     .input(
       z.object({

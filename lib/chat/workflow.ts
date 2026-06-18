@@ -9,6 +9,8 @@ export type ChatStatusAction =
   | "save_vacancy"
   | "confirm_comment"
   | "save_comment"
+  | "submit_analysis_sources"
+  | "save_analysis_field"
   | "classify_candidates"
   | "none";
 
@@ -63,6 +65,16 @@ export const chatStatusFlow = {
     expectsUserInput: true,
     messageKey: "commentTextRequest",
     nextStatus: ChatStatus.ReadyToClassify,
+  },
+  [ChatStatus.WaitingForAnalysisSources]: {
+    action: "submit_analysis_sources",
+    expectsUserInput: true,
+    messageKey: "analysisSourcesRequest",
+  },
+  [ChatStatus.WaitingForAnalysisField]: {
+    action: "save_analysis_field",
+    expectsUserInput: true,
+    messageKey: "analysisFieldRequest",
   },
   [ChatStatus.ReadyToClassify]: {
     action: "classify_candidates",

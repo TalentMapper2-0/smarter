@@ -108,6 +108,12 @@ export function mapDbMessageToChatMessage(row: DbMessageRow): ChatMessage {
       };
 
     case ChatMessageType.Text:
+      return {
+        ...base,
+        type,
+        metadata,
+      };
+
     case ChatMessageType.Unsupported:
     case ChatMessageType.EndOfChat:
       return {
